@@ -1,0 +1,15 @@
+{
+  "name": "agentbook",
+  "version": "0.1.0",
+  "description": "AI-oriented cross-session plan tracking using SQLite",
+  "type": "module",
+  "bin": {
+    "agentbook": "./src/cli.ts"
+  },
+  "files": [
+    "src",
+    "skills",
+    "agents"
+  ],
+  "license": "MIT"
+}

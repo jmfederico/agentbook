@@ -34,7 +34,7 @@ Symlink or copy the agent files to your global config:
 
 ```bash
 mkdir -p ~/.config/opencode/agents
-ln -s ~/agentbook/agents/planner.md ~/.config/opencode/agents/planner.md
+ln -s ~/agentbook/agents/coordinator.md ~/.config/opencode/agents/coordinator.md
 ln -s ~/agentbook/agents/worker.md ~/.config/opencode/agents/worker.md
 ```
 
@@ -45,7 +45,7 @@ Override agent models per-project in `opencode.json`:
 ```jsonc
 {
   "agent": {
-    "planner": {
+    "coordinator": {
       "model": "anthropic/claude-opus-4-20250514",
     },
     "worker": {
@@ -76,7 +76,7 @@ To avoid permission prompts for agentbook commands, add to your config:
 ### Create a plan
 
 ```
-@planner Add OAuth2 authentication to the API
+@coordinator Add OAuth2 authentication to the API
 ```
 
 ### Execute a plan
@@ -113,14 +113,12 @@ Agentbook stores its data under git's common directory, making it shared across 
 <repo-root>/
 ├── .git/
 │   └── agentbook/
-│       ├── agentbook.db        # shared database
-│       └── plans/
-│           └── <plan-id>.md    # plan detail files
+│       └── agentbook.db        # shared database
 ├── opencode.json
 └── ...
 ```
 
-> **Note:** Older versions stored data in `.opencode/agentbook.db` and `.opencode/plans/`. These legacy locations are auto-migrated on first use (see below).
+> **Note:** Older versions stored data in `.opencode/agentbook.db`. Legacy locations are auto-migrated on first use (see below).
 
 ## Worktree Support & Migration
 

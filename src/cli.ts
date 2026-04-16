@@ -69,6 +69,9 @@ function migrate(db: Database) {
     db.run(`ALTER TABLE plan ADD COLUMN name TEXT DEFAULT ''`)
     db.run(`UPDATE plan SET name = title WHERE name = ''`)
   }
+  if (!planColumns.some((column) => column.name === "document")) {
+    db.run(`ALTER TABLE plan ADD COLUMN document TEXT DEFAULT ''`)
+  }
   db.run(`CREATE TABLE IF NOT EXISTS task (
     id TEXT PRIMARY KEY,
     plan_id TEXT NOT NULL REFERENCES plan(id) ON DELETE CASCADE,
@@ -147,15 +150,16 @@ function planCreate(db: Database, args: string[]) {
   if (!title) die("--title is required")
   const name = flag(args, "--name") || title
   const description = flag(args, "--description") || ""
+  const document = flag(args, "--document") || ""
   const by = flag(args, "--created-by") || ""
   const id = randomUUIDv7()
   const ts = now()
   db.run(
-    `INSERT INTO plan (id, name, title, description, status, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, 'draft', ?, ?, ?)`,
-    [id, name, title, description, by, ts, ts],
+    `INSERT INTO plan (id, name, title, description, document, status, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'draft', ?, ?, ?)`,
+    [id, name, title, description, document, by, ts, ts],
   )
   logActivity(db, id, "", "created", "", `Plan created: ${name}`)
-  json({ id, name, title, description, status: "draft", created_by: by, created_at: ts })
+  json({ id, name, title, description, document, status: "draft", created_by: by, created_at: ts })
 }
 
 function planList(db: Database, args: string[]) {
@@ -184,12 +188,14 @@ function planUpdate(db: Database, args: string[]) {
   const name = flag(args, "--name") ?? (existing as { name: string }).name
   const title = flag(args, "--title") || existing.title
   const description = flag(args, "--description") ?? existing.description
+  const document = flag(args, "--document") ?? (existing as any).document
   const status = flag(args, "--status") || existing.status
   const ts = now()
-  db.run(`UPDATE plan SET name = ?, title = ?, description = ?, status = ?, updated_at = ? WHERE id = ?`, [
+  db.run(`UPDATE plan SET name = ?, title = ?, description = ?, document = ?, status = ?, updated_at = ? WHERE id = ?`, [
     name,
     title,
     description,
+    document,
     status,
     ts,
     id,
@@ -197,7 +203,7 @@ function planUpdate(db: Database, args: string[]) {
   if (status !== existing.status) {
     logActivity(db, id, "", "status_changed", "", `Plan status: ${existing.status} -> ${status}`)
   }
-  json({ id, name, title, description, status, updated_at: ts })
+  json({ id, name, title, description, document, status, updated_at: ts })
 }
 
 function taskCreate(db: Database, args: string[]) {
@@ -327,7 +333,7 @@ function summary(db: Database, args: string[]) {
     .all(planId) as Array<{ action: string; detail: string; agent: string; created_at: number }>
 
   json({
-    plan: { id: plan.id, name: plan.name, title: plan.title, status: plan.status, description: plan.description },
+    plan: { id: plan.id, name: plan.name, title: plan.title, status: plan.status, description: plan.description, document: plan.document },
     progress: { total, completed: done, needs_review: needsReview, percentage: progress, by_status: counts },
     tasks: tasks.map((t) => ({
       id: t.id,
@@ -351,10 +357,10 @@ function usage(): never {
 Usage: agentbook <command> <subcommand> [options]
 
 Commands:
-  plan create   --title <t> [--name <n>] [--description <d>] [--created-by <name>]
+  plan create   --title <t> [--name <n>] [--description <d>] [--document <d>] [--created-by <name>]
   plan list     [--status <s>]
   plan get      <plan-id|plan-name>
-  plan update   <plan-id|plan-name> [--name <n>] [--title <t>] [--description <d>] [--status <s>]
+  plan update   <plan-id|plan-name> [--name <n>] [--title <t>] [--description <d>] [--document <d>] [--status <s>]
 
   task create   --plan <plan-id|plan-name> --title <t> [--description <d>] [--priority <n>] [--depends-on <ids>]
   task list     [--plan <plan-id|plan-name>] [--status <s>]

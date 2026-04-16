@@ -82,31 +82,50 @@ To avoid permission prompts for agentbook commands, add to your config:
 ### Execute a plan
 
 ```
-@worker Resume plan <plan-id>
+@worker Resume plan <plan-name>
 ```
 
 ### Check progress from any session or worktree
 
 ```
-What's the status of plan <plan-id>?
+What's the status of plan <plan-name>?
 ```
 
 ### Query the database directly
 
+The CLI auto-resolves the database location when inside a git repo, so you can simply run:
+
 ```bash
-AGENTBOOK_DB="/path/to/main/repo/.opencode/agentbook.db" agentbook summary <plan-id>
+agentbook summary <plan-name>
+```
+
+To override the database path (e.g., for non-git usage or testing):
+
+```bash
+AGENTBOOK_DB="/path/to/db/agentbook.db" agentbook summary <plan-name>
 ```
 
 ## File Structure
 
-After setup, your project will have:
+Agentbook stores its data under git's common directory, making it shared across all worktrees:
 
 ```
 <repo-root>/
-├── .opencode/
-│   ├── agentbook.db
-│   └── plans/
-│       └── <plan-id>.md
+├── .git/
+│   └── agentbook/
+│       ├── agentbook.db        # shared database
+│       └── plans/
+│           └── <plan-id>.md    # plan detail files
 ├── opencode.json
 └── ...
 ```
+
+> **Note:** Older versions stored data in `.opencode/agentbook.db` and `.opencode/plans/`. These legacy locations are auto-migrated on first use (see below).
+
+## Worktree Support & Migration
+
+- **Shared storage:** The database lives at `<git-common-dir>/agentbook/agentbook.db`, which is shared across all git worktrees automatically. No configuration needed.
+- **Auto-migration:** If a legacy `.opencode/agentbook.db` exists in a worktree and no shared DB exists yet, the CLI automatically copies it to the shared location on first use.
+- **Precedence:** If both a shared DB and a legacy `.opencode/agentbook.db` exist, the shared DB takes precedence.
+- **Non-git fallback:** Outside a git repo, the CLI falls back to `.opencode/agentbook.db` in the current directory.
+- **Manual override:** Set `AGENTBOOK_DB` to point to any database file.

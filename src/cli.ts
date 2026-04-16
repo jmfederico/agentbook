@@ -4,9 +4,46 @@ import { Database } from "bun:sqlite"
 import { randomUUIDv7 } from "bun"
 import path from "path"
 import fs from "fs"
+import { execSync } from "child_process"
+
+function resolveSharedRoot(): string | null {
+  try {
+    const raw = execSync("git rev-parse --git-common-dir", { encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] }).trim()
+    const gitCommonDir = path.resolve(process.cwd(), raw)
+    return path.join(gitCommonDir, "agentbook")
+  } catch {
+    return null
+  }
+}
+
+function resolveDbPath(): string {
+  if (process.env.AGENTBOOK_DB) return process.env.AGENTBOOK_DB
+
+  const legacyPath = path.join(process.cwd(), ".opencode", "agentbook.db")
+  const sharedRoot = resolveSharedRoot()
+
+  if (sharedRoot) {
+    const sharedDb = path.join(sharedRoot, "agentbook.db")
+    const sharedExists = fs.existsSync(sharedDb)
+    const legacyExists = fs.existsSync(legacyPath)
+
+    if (!sharedExists && legacyExists) {
+      // Migrate legacy DB to shared location
+      if (!fs.existsSync(sharedRoot)) fs.mkdirSync(sharedRoot, { recursive: true })
+      fs.copyFileSync(legacyPath, sharedDb)
+      console.error(`Migrated database from .opencode/agentbook.db to ${sharedDb}`)
+    } else if (sharedExists && legacyExists) {
+      console.error(`Note: legacy database found at .opencode/agentbook.db; using shared database at ${sharedDb}`)
+    }
+
+    return sharedDb
+  }
+
+  return legacyPath
+}
 
 function open() {
-  const file = process.env.AGENTBOOK_DB || path.join(process.cwd(), ".opencode", "agentbook.db")
+  const file = resolveDbPath()
   const dir = path.dirname(file)
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
   const db = new Database(file)
@@ -19,6 +56,7 @@ function open() {
 function migrate(db: Database) {
   db.run(`CREATE TABLE IF NOT EXISTS plan (
     id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
     title TEXT NOT NULL,
     description TEXT DEFAULT '',
     status TEXT NOT NULL DEFAULT 'draft',
@@ -26,6 +64,11 @@ function migrate(db: Database) {
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL
   )`)
+  const planColumns = db.query(`PRAGMA table_info(plan)`).all() as Array<{ name: string }>
+  if (!planColumns.some((column) => column.name === "name")) {
+    db.run(`ALTER TABLE plan ADD COLUMN name TEXT DEFAULT ''`)
+    db.run(`UPDATE plan SET name = title WHERE name = ''`)
+  }
   db.run(`CREATE TABLE IF NOT EXISTS task (
     id TEXT PRIMARY KEY,
     plan_id TEXT NOT NULL REFERENCES plan(id) ON DELETE CASCADE,
@@ -68,6 +111,17 @@ function positional(args: string[]): string | undefined {
   return args.find((a) => !a.startsWith("--"))
 }
 
+function resolvePlan(db: Database, ref: string) {
+  const byId = db.query(`SELECT * FROM plan WHERE id = ?`).get(ref)
+  if (byId) return byId
+
+  const byName = db.query(`SELECT * FROM plan WHERE name = ? ORDER BY created_at DESC`).all(ref) as Array<Record<string, unknown>>
+  if (byName.length === 1) return byName[0]
+  if (byName.length > 1) die(`multiple plans found with name: ${ref}`)
+
+  return null
+}
+
 function json(data: unknown) {
   console.log(JSON.stringify(data, null, 2))
 }
@@ -91,16 +145,17 @@ function logActivity(db: Database, plan: string, task: string, action: string, a
 function planCreate(db: Database, args: string[]) {
   const title = flag(args, "--title")
   if (!title) die("--title is required")
+  const name = flag(args, "--name") || title
   const description = flag(args, "--description") || ""
   const by = flag(args, "--created-by") || ""
   const id = randomUUIDv7()
   const ts = now()
   db.run(
-    `INSERT INTO plan (id, title, description, status, created_by, created_at, updated_at) VALUES (?, ?, ?, 'draft', ?, ?, ?)`,
-    [id, title, description, by, ts, ts],
+    `INSERT INTO plan (id, name, title, description, status, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, 'draft', ?, ?, ?)`,
+    [id, name, title, description, by, ts, ts],
   )
-  logActivity(db, id, "", "created", "", `Plan created: ${title}`)
-  json({ id, title, description, status: "draft", created_by: by, created_at: ts })
+  logActivity(db, id, "", "created", "", `Plan created: ${name}`)
+  json({ id, name, title, description, status: "draft", created_by: by, created_at: ts })
 }
 
 function planList(db: Database, args: string[]) {
@@ -112,24 +167,27 @@ function planList(db: Database, args: string[]) {
 }
 
 function planGet(db: Database, args: string[]) {
-  const id = positional(args)
-  if (!id) die("plan id is required")
-  const plan = db.query(`SELECT * FROM plan WHERE id = ?`).get(id)
-  if (!plan) die(`plan not found: ${id}`)
-  const tasks = db.query(`SELECT * FROM task WHERE plan_id = ? ORDER BY position`).all(id)
+  const ref = positional(args)
+  if (!ref) die("plan id or name is required")
+  const plan = resolvePlan(db, ref)
+  if (!plan) die(`plan not found: ${ref}`)
+  const tasks = db.query(`SELECT * FROM task WHERE plan_id = ? ORDER BY position`).all((plan as { id: string }).id)
   json({ ...plan, tasks })
 }
 
 function planUpdate(db: Database, args: string[]) {
-  const id = positional(args)
-  if (!id) die("plan id is required")
-  const existing = db.query(`SELECT * FROM plan WHERE id = ?`).get(id)
-  if (!existing) die(`plan not found: ${id}`)
+  const ref = positional(args)
+  if (!ref) die("plan id or name is required")
+  const existing = resolvePlan(db, ref)
+  if (!existing) die(`plan not found: ${ref}`)
+  const id = (existing as { id: string }).id
+  const name = flag(args, "--name") ?? (existing as { name: string }).name
   const title = flag(args, "--title") || existing.title
   const description = flag(args, "--description") ?? existing.description
   const status = flag(args, "--status") || existing.status
   const ts = now()
-  db.run(`UPDATE plan SET title = ?, description = ?, status = ?, updated_at = ? WHERE id = ?`, [
+  db.run(`UPDATE plan SET name = ?, title = ?, description = ?, status = ?, updated_at = ? WHERE id = ?`, [
+    name,
     title,
     description,
     status,
@@ -139,7 +197,7 @@ function planUpdate(db: Database, args: string[]) {
   if (status !== existing.status) {
     logActivity(db, id, "", "status_changed", "", `Plan status: ${existing.status} -> ${status}`)
   }
-  json({ id, title, description, status, updated_at: ts })
+  json({ id, name, title, description, status, updated_at: ts })
 }
 
 function taskCreate(db: Database, args: string[]) {
@@ -147,31 +205,34 @@ function taskCreate(db: Database, args: string[]) {
   if (!plan) die("--plan is required")
   const title = flag(args, "--title")
   if (!title) die("--title is required")
-  const existing = db.query(`SELECT id FROM plan WHERE id = ?`).get(plan)
+  const existing = resolvePlan(db, plan)
   if (!existing) die(`plan not found: ${plan}`)
+  const planId = (existing as { id: string }).id
   const description = flag(args, "--description") || ""
   const priority = parseInt(flag(args, "--priority") || "0", 10)
   const depends = flag(args, "--depends-on") || ""
-  const max = db.query(`SELECT COALESCE(MAX(position), -1) as m FROM task WHERE plan_id = ?`).get(plan) as { m: number }
+  const max = db.query(`SELECT COALESCE(MAX(position), -1) as m FROM task WHERE plan_id = ?`).get(planId) as { m: number }
   const position = max.m + 1
   const id = randomUUIDv7()
   const ts = now()
   db.run(
     `INSERT INTO task (id, plan_id, title, description, status, priority, position, depends_on, created_at, updated_at) VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?)`,
-    [id, plan, title, description, priority, position, depends, ts, ts],
+    [id, planId, title, description, priority, position, depends, ts, ts],
   )
-  logActivity(db, plan, id, "task_created", "", `Task created: ${title}`)
-  json({ id, plan_id: plan, title, description, status: "pending", priority, position, depends_on: depends })
+  logActivity(db, planId, id, "task_created", "", `Task created: ${title}`)
+  json({ id, plan_id: planId, title, description, status: "pending", priority, position, depends_on: depends })
 }
 
 function taskList(db: Database, args: string[]) {
-  const plan = flag(args, "--plan")
+  const planRef = flag(args, "--plan")
   const status = flag(args, "--status")
   let q = `SELECT * FROM task WHERE 1=1`
   const params: unknown[] = []
-  if (plan) {
+  if (planRef) {
+    const plan = resolvePlan(db, planRef)
+    if (!plan) die(`plan not found: ${planRef}`)
     q += ` AND plan_id = ?`
-    params.push(plan)
+    params.push((plan as { id: string }).id)
   }
   if (status) {
     q += ` AND status = ?`
@@ -218,30 +279,37 @@ function taskUpdate(db: Database, args: string[]) {
 }
 
 function activityCreate(db: Database, args: string[]) {
-  const plan = flag(args, "--plan")
-  if (!plan) die("--plan is required")
+  const planRef = flag(args, "--plan")
+  if (!planRef) die("--plan is required")
+  const plan = resolvePlan(db, planRef)
+  if (!plan) die(`plan not found: ${planRef}`)
   const task = flag(args, "--task") || ""
   const action = flag(args, "--action") || "note"
   const detail = flag(args, "--detail") || ""
   const agent = flag(args, "--agent") || ""
-  logActivity(db, plan, task, action, agent, detail)
+  logActivity(db, (plan as { id: string }).id, task, action, agent, detail)
   json({ ok: true })
 }
 
 function activityList(db: Database, args: string[]) {
-  const plan = flag(args, "--plan")
-  if (!plan) die("--plan is required")
+  const planRef = flag(args, "--plan")
+  if (!planRef) die("--plan is required")
+  const plan = resolvePlan(db, planRef)
+  if (!plan) die(`plan not found: ${planRef}`)
   const limit = parseInt(flag(args, "--limit") || "20", 10)
-  const rows = db.query(`SELECT * FROM activity WHERE plan_id = ? ORDER BY created_at DESC LIMIT ?`).all(plan, limit)
+  const rows = db
+    .query(`SELECT * FROM activity WHERE plan_id = ? ORDER BY created_at DESC LIMIT ?`)
+    .all((plan as { id: string }).id, limit)
   json(rows)
 }
 
 function summary(db: Database, args: string[]) {
-  const id = positional(args)
-  if (!id) die("plan id is required")
-  const plan = db.query(`SELECT * FROM plan WHERE id = ?`).get(id)
-  if (!plan) die(`plan not found: ${id}`)
-  const tasks = db.query(`SELECT * FROM task WHERE plan_id = ? ORDER BY position`).all(id) as Array<{
+  const ref = positional(args)
+  if (!ref) die("plan id or name is required")
+  const plan = resolvePlan(db, ref)
+  if (!plan) die(`plan not found: ${ref}`)
+  const planId = (plan as { id: string }).id
+  const tasks = db.query(`SELECT * FROM task WHERE plan_id = ? ORDER BY position`).all(planId) as Array<{
     status: string
     id: string
     title: string
@@ -252,14 +320,15 @@ function summary(db: Database, args: string[]) {
   for (const t of tasks) counts[t.status] = (counts[t.status] || 0) + 1
   const total = tasks.length
   const done = counts["completed"] || 0
+  const needsReview = counts["needs_review"] || 0
   const progress = total > 0 ? Math.round((done / total) * 100) : 0
   const recent = db
     .query(`SELECT * FROM activity WHERE plan_id = ? ORDER BY created_at DESC LIMIT 5`)
-    .all(id) as Array<{ action: string; detail: string; agent: string; created_at: number }>
+    .all(planId) as Array<{ action: string; detail: string; agent: string; created_at: number }>
 
   json({
-    plan: { id: plan.id, title: plan.title, status: plan.status, description: plan.description },
-    progress: { total, completed: done, percentage: progress, by_status: counts },
+    plan: { id: plan.id, name: plan.name, title: plan.title, status: plan.status, description: plan.description },
+    progress: { total, completed: done, needs_review: needsReview, percentage: progress, by_status: counts },
     tasks: tasks.map((t) => ({
       id: t.id,
       title: t.title,
@@ -282,24 +351,25 @@ function usage(): never {
 Usage: agentbook <command> <subcommand> [options]
 
 Commands:
-  plan create   --title <t> [--description <d>] [--created-by <name>]
+  plan create   --title <t> [--name <n>] [--description <d>] [--created-by <name>]
   plan list     [--status <s>]
-  plan get      <plan-id>
-  plan update   <plan-id> [--title <t>] [--description <d>] [--status <s>]
+  plan get      <plan-id|plan-name>
+  plan update   <plan-id|plan-name> [--name <n>] [--title <t>] [--description <d>] [--status <s>]
 
-  task create   --plan <plan-id> --title <t> [--description <d>] [--priority <n>] [--depends-on <ids>]
-  task list     [--plan <plan-id>] [--status <s>]
+  task create   --plan <plan-id|plan-name> --title <t> [--description <d>] [--priority <n>] [--depends-on <ids>]
+  task list     [--plan <plan-id|plan-name>] [--status <s>]
   task get      <task-id>
   task update   <task-id> [--status <s>] [--assignee <a>] [--notes <n>] [--session <sid>] [--worktree <dir>]
 
-  log create    --plan <plan-id> [--task <task-id>] [--action <a>] [--detail <d>] [--agent <name>]
-  log list      --plan <plan-id> [--limit <n>]
+  log create    --plan <plan-id|plan-name> [--task <task-id>] [--action <a>] [--detail <d>] [--agent <name>]
+  log list      --plan <plan-id|plan-name> [--limit <n>]
 
-  summary       <plan-id>
+  summary       <plan-id|plan-name>
+  ui [--port <n>]   Launch the dashboard web UI (default port: 3141)
   init
 
 Environment:
-  AGENTBOOK_DB   Path to SQLite database (default: .opencode/agentbook.db)`)
+  AGENTBOOK_DB   Path to SQLite database (default: $GIT_COMMON_DIR/agentbook/agentbook.db or .opencode/agentbook.db)`)
   process.exit(0)
 }
 
@@ -310,11 +380,24 @@ const cmd = args[0]
 const sub = args[1]
 const rest = args.slice(2)
 
+if (cmd === "ui") {
+  const port = parseInt(flag(args.slice(1), "--port") || process.env.PORT || "3141", 10)
+  const { startServer } = await import("./ui/server.ts")
+  startServer(port)
+  console.log(`Agentbook Dashboard: http://localhost:${port}`)
+  try {
+    const open = process.platform === "darwin" ? "open" : process.platform === "win32" ? "start" : "xdg-open"
+    execSync(`${open} http://localhost:${port}`, { stdio: "ignore" })
+  } catch {}
+  // Keep the process alive
+  await new Promise(() => {})
+}
+
 const db = open()
 
 try {
   if (cmd === "init") {
-    json({ ok: true, db: process.env.AGENTBOOK_DB || path.join(process.cwd(), ".opencode", "agentbook.db") })
+    json({ ok: true, db: resolveDbPath() })
   } else if (cmd === "plan") {
     if (sub === "create") planCreate(db, rest)
     else if (sub === "list") planList(db, rest)

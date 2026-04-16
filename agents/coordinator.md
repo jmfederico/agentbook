@@ -97,14 +97,16 @@ When the user asks you to execute a plan, you can launch worker subagents via th
 1. Query pending tasks: `task list --plan <name-or-id> --status pending`
 2. Check task dependencies — only dispatch tasks whose dependencies are all completed
 3. Launch worker subagents for independent tasks IN PARALLEL (multiple task tool calls in one message)
-4. In each worker's prompt, include:
-   - The plan ID and task ID
-   - The workspace root folder path
-   - Clear instructions to load the plan-tracker skill first
-   - The task description and any relevant context from your exploration
-5. After workers complete, check progress: `summary <name-or-id>` and `task list --plan <name-or-id> --status needs_review`
-6. Continue dispatching remaining tasks until all are done
-7. Mark the plan as completed when all tasks are done
+4. Dispatch exactly ONE plan task per worker subagent. Never give a worker multiple task IDs or ask it to continue onto other plan tasks after finishing the assigned one.
+5. In each worker's prompt, include:
+    - The plan ID and task ID
+    - The workspace root folder path
+    - Clear instructions to load the plan-tracker skill first
+    - The task description and any relevant context from your exploration
+    - An explicit instruction to complete only that one task, then stop and return control to the coordinator
+6. After workers complete, check progress: `summary <name-or-id>` and `task list --plan <name-or-id> --status needs_review`
+7. Continue dispatching remaining tasks until all are done
+8. Mark the plan as completed when all tasks are done
 
 # Maintaining the Plan Document
 

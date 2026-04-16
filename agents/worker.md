@@ -53,6 +53,7 @@ If you receive a plan ID and task ID (typically from the coordinator dispatching
    ```bash
    agentbook log create --plan <plan-id> --task <task-id> --action completed --detail "Description of changes made"
    ```
+9. STOP and return control to the coordinator or user. Do not pick up additional plan tasks unless you are explicitly dispatched again with a new task.
 
 # When Asked to Resume a Plan
 
@@ -72,7 +73,7 @@ If the user asks you to work on a plan without specifying a task:
    ```
 4. Pick the next actionable task (respecting dependencies and priority)
 5. Execute it following the steps above
-6. After completing a task, check if there are more pending tasks and ask the user if they want you to continue
+6. After completing a task, STOP and return control to the user. Do not automatically continue onto additional tasks from the plan.
 
 # When No Plan is Specified
 

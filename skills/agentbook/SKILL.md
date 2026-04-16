@@ -28,11 +28,11 @@ All commands output JSON.
 ### Plan Commands
 
 ```bash
-agentbook plan create --title "Feature: OAuth2" --name "oauth2-auth" --description "Add OAuth2 authentication to the API"
+agentbook plan create --title "Feature: OAuth2" --name "oauth2-auth" --description "Add OAuth2 authentication to the API" [--document <doc>]
 agentbook plan list
 agentbook plan list --status active
 agentbook plan get <plan-id-or-name>
-agentbook plan update <plan-id-or-name> --status active
+agentbook plan update <plan-id-or-name> --status active [--document <doc>]
 ```
 
 ### Task Commands
@@ -79,12 +79,30 @@ Plan JSON includes both a stable UUID `id` and a user-facing `name`. Prefer show
 - `in_progress`
 - `completed`
 - `blocked`
-- `needs_review` — worker paused for planner review
+- `needs_review` — worker paused for coordinator review
 - `cancelled`
 
 ### Dependencies
 
 Tasks can declare dependencies via `--depends-on` (comma-separated task IDs). Before starting a task, check that all its dependencies are `completed`.
+
+## Plan Document
+
+The `document` field stores a comprehensive markdown document for each plan. It is the primary knowledge artifact that enables agent handoff between coordinator and worker sessions.
+
+The plan document is a **living artifact** — it should be updated throughout execution, not just written once during planning.
+
+Suggested contents include goals and success criteria, context and background, architecture or design decisions, key files and patterns, constraints and risks, open questions, and current status notes.
+
+The document should be updated at these key moments:
+- After the task breakdown — finalize with task structure and sequencing rationale
+- After handling a worker checkpoint or review — record what changed and why
+- When the user changes scope or requirements — update goals and constraints
+- When resuming from a new session — verify the document still matches reality
+
+Coordinators should write or update this document after the design phase with `plan update <id> --document "..."`. Workers should read it from `plan get` output to understand the full context before executing tasks.
+
+The document is free-form markdown, so its structure can vary based on the plan's complexity.
 
 ## Workflow Protocol
 
@@ -100,18 +118,23 @@ Tasks can declare dependencies via `--depends-on` (comma-separated task IDs). Be
 
 1. Query for pending tasks: `task list --plan <name-or-id> --status pending`
 2. Check dependencies before starting
-3. Claim the task: `task update <id> --status in_progress --assignee "worker" --session "<session>"`
-4. Do the implementation work
+3. Dispatch or claim exactly one task at a time per worker session. Parallelism should come from multiple workers, not from giving one worker multiple tasks.
+4. Claim the task: `task update <id> --status in_progress --assignee "worker" --session "<session>"`
+5. Do the implementation work
 
-   If the task is large or you encounter issues, set status to `needs_review` with notes summarizing progress and concerns, then stop. The planner will review and decide next steps.
+    If the task is large or you encounter issues, set status to `needs_review` with notes summarizing progress and concerns, then stop. The coordinator will review and decide next steps.
 
-5. Mark complete: `task update <id> --status completed --notes "summary of what was done"`
-6. Log activity: `log create --plan <id> --task <id> --action completed --detail "..."`
+6. Mark complete: `task update <id> --status completed --notes "summary of what was done"`
+
+    If the task revealed unexpected constraints or required design changes, the coordinator should update the plan document.
+
+7. Log activity: `log create --plan <id> --task <id> --action completed --detail "..."`
+8. Return control after that task. Do not continue onto another plan task in the same worker session unless explicitly re-dispatched.
 
 ### Resuming from Another Session or Worktree
 
 1. List active plans: `plan list --status active`
-2. Get plan details: `plan get <plan-name-or-id>`
+2. Read the plan document and verify it is current: `plan get <plan-name-or-id>` — confirm the document still matches reality before continuing work
 3. Find pending or in-progress tasks: `task list --plan <id>`
 4. Continue from where the previous session left off
 

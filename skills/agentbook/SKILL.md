@@ -32,6 +32,8 @@ agentbook plan create --title "Feature: OAuth2" --name "oauth2-auth" --descripti
 agentbook plan list
 agentbook plan list --status active
 agentbook plan get <plan-id-or-name>
+agentbook plan archive <plan-id-or-name>
+agentbook plan archive --older-than 7d
 agentbook plan update <plan-id-or-name> --status active [--document <doc>]
 ```
 
@@ -72,6 +74,7 @@ Plan JSON includes both a stable UUID `id` and a user-facing `name`. Prefer show
 - `paused`
 - `completed`
 - `cancelled`
+- `archived`
 
 ### Task Statuses
 

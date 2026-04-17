@@ -14,6 +14,7 @@ type OpenCodeProjectRow = {
 
 type AgentbookPlanRow = {
   id: string
+  name: string
   title: string
   description: string | null
   document: string | null
@@ -374,6 +375,31 @@ const APP_CSS = String.raw`
       flex-wrap: wrap;
     }
 
+    .copy-plan-button {
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--muted);
+      border-radius: 999px;
+      padding: 4px 8px;
+      font-size: 0.8rem;
+      line-height: 1;
+      cursor: pointer;
+      flex: none;
+      transition: color 120ms ease, background 120ms ease, border-color 120ms ease;
+    }
+
+    .copy-plan-button:hover {
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.08);
+      border-color: rgba(255, 255, 255, 0.14);
+    }
+
+    .copy-plan-button.copied {
+      color: #7ee787;
+      border-color: rgba(126, 231, 135, 0.35);
+      background: rgba(126, 231, 135, 0.12);
+    }
+
     .plan-title {
       font-size: 1rem;
     }
@@ -648,6 +674,7 @@ type TaskDetails = {
 
 type PlanDetails = {
   id: string
+  name: string
   title: string
   status: string
   description: string
@@ -837,6 +864,7 @@ function loadProjectDetails(projectId: string): ProjectDetails {
 
         return {
           id: plan.id,
+          name: plan.name,
           title: plan.title,
           status: plan.status,
           description: plan.description ?? "",
@@ -925,9 +953,19 @@ function statusBadge(status: string, label?: string): string {
   return `<span class="badge status-${escapeHtml(status)}">${escapeHtml(label ?? humanizeStatus(status))}</span>`
 }
 
+function statusSortPriority(status: string): number {
+  if (["active", "draft", "paused"].includes(status)) return 0
+  if (status === "completed") return 1
+  if (status === "cancelled") return 2
+  return 3
+}
+
 function filterPlans(plans: PlanDetails[]): PlanDetails[] {
   const now = Date.now()
-  return plans.filter((plan) => !(plan.status === "completed" && now - Number(plan.updated_at) > TWO_DAYS_MS))
+  return plans.filter(
+    (plan) =>
+      plan.status !== "archived" && !(plan.status === "completed" && now - Number(plan.updated_at) > TWO_DAYS_MS),
+  )
 }
 
 function frameId(planId: string): string {
@@ -1141,6 +1179,7 @@ function renderPlanSummary(plan: PlanDetails): string {
   const completed = tasks.filter((task) => task.status === "completed").length
   const total = tasks.length
   const percentage = total ? Math.round((completed / total) * 100) : 0
+  const copyText = JSON.stringify(`${plan.id} ${plan.name}`)
 
   return `
     <summary class="plan-summary">
@@ -1150,6 +1189,13 @@ function renderPlanSummary(plan: PlanDetails): string {
           <h4 class="plan-title">${escapeHtml(plan.title || "Untitled plan")}</h4>
           ${statusBadge(plan.status || "draft")}
         </div>
+        <button
+          type="button"
+          class="copy-plan-button"
+          title="Copy UUID + name"
+          aria-label="Copy UUID and name for ${escapeHtml(plan.title || plan.name || "plan")}"
+          onclick="event.preventDefault(); event.stopPropagation(); const button = this; const label = button.querySelector('.copy-plan-button-text'); const original = label?.textContent || '📋'; navigator.clipboard.writeText(${escapeHtml(copyText)}).then(() => { if (label) label.textContent = 'Copied!'; button.classList.add('copied'); clearTimeout(button.__copyResetTimer); button.__copyResetTimer = setTimeout(() => { if (label) label.textContent = original; button.classList.remove('copied'); }, 1500); });"
+        ><span class="copy-plan-button-text">📋</span></button>
       </div>
       <div class="plan-summary-meta">
         <span class="plan-summary-stat">${completed}/${total} tasks</span>
@@ -1213,8 +1259,20 @@ function renderDetail(detail: ProjectDetails): string {
   const project = detail.project
   const allPlans = Array.isArray(detail.plans) ? detail.plans : []
   const activity = Array.isArray(detail.activity) ? detail.activity.slice(0, 20) : []
-  const plans = filterPlans(allPlans).sort((left, right) => Number(right.created_at) - Number(left.created_at))
-  const hiddenCount = allPlans.length - plans.length
+  const now = Date.now()
+  const archivedCount = allPlans.filter((plan) => plan.status === "archived").length
+  const olderCompletedHiddenCount = allPlans.filter(
+    (plan) => plan.status === "completed" && now - Number(plan.updated_at) > TWO_DAYS_MS,
+  ).length
+  const hiddenDetails = [
+    olderCompletedHiddenCount ? `${pluralize(olderCompletedHiddenCount, "older completed plan")} hidden` : "",
+    archivedCount ? pluralize(archivedCount, "archived plan") : "",
+  ].filter(Boolean)
+  const plans = filterPlans(allPlans).sort((left, right) => {
+    const priorityDiff = statusSortPriority(left.status) - statusSortPriority(right.status)
+    if (priorityDiff !== 0) return priorityDiff
+    return Number(right.updated_at) - Number(left.updated_at)
+  })
 
   const header = `
     <section class="detail-header">
@@ -1245,7 +1303,7 @@ function renderDetail(detail: ProjectDetails): string {
       <section>
         <div class="section-header">
           <h3 class="section-title">Plans</h3>
-          <div class="meta">${pluralize(plans.length, "plan")}${hiddenCount ? ` (${hiddenCount} older completed hidden)` : ""}</div>
+          <div class="meta">${pluralize(plans.length, "plan")}${hiddenDetails.length ? ` (${hiddenDetails.join(", ")})` : ""}</div>
         </div>
         <div class="plan-list">${plansHtml}</div>
       </section>
@@ -1271,7 +1329,7 @@ function renderDetail(detail: ProjectDetails): string {
     `Viewing ${project.name}. Auto-refreshing every 10 seconds.`,
     projectHref(project.id),
     `${header}<div class="stack">${plansSection}${activitySection}</div>`,
-    "page",
+    "frames",
   )
 }
 

@@ -111,7 +111,29 @@ function flag(args: string[], name: string): string | undefined {
 }
 
 function positional(args: string[]): string | undefined {
-  return args.find((a) => !a.startsWith("--"))
+  for (let i = 0; i < args.length; i++) {
+    if (args[i].startsWith("--")) {
+      i += 1
+      continue
+    }
+    return args[i]
+  }
+  return undefined
+}
+
+function parseDuration(input: string): number {
+  const match = input.match(/^(\d+)([hdw])$/)
+  if (!match) die(`invalid duration: ${input}; expected formats like 12h, 7d, or 2w`)
+
+  const value = parseInt(match[1], 10)
+  const unit = match[2]
+  const multipliers: Record<string, number> = {
+    h: 60 * 60 * 1000,
+    d: 24 * 60 * 60 * 1000,
+    w: 7 * 24 * 60 * 60 * 1000,
+  }
+
+  return value * multipliers[unit]
 }
 
 function resolvePlan(db: Database, ref: string) {
@@ -166,8 +188,42 @@ function planList(db: Database, args: string[]) {
   const status = flag(args, "--status")
   const rows = status
     ? db.query(`SELECT * FROM plan WHERE status = ? ORDER BY created_at DESC`).all(status)
-    : db.query(`SELECT * FROM plan ORDER BY created_at DESC`).all()
+    : db.query(`SELECT * FROM plan WHERE status != 'archived' ORDER BY created_at DESC`).all()
   json(rows)
+}
+
+function planArchive(db: Database, args: string[]) {
+  const ref = positional(args)
+  const olderThan = flag(args, "--older-than")
+
+  if (ref && olderThan) die("provide either a plan ref or --older-than, not both")
+  if (!ref && !olderThan) die("plan id or name is required, or provide --older-than <duration>")
+
+  if (ref) {
+    const existing = resolvePlan(db, ref)
+    if (!existing) die(`plan not found: ${ref}`)
+
+    const plan = existing as Record<string, unknown>
+    const ts = now()
+    db.run(`UPDATE plan SET status = 'archived', updated_at = ? WHERE id = ?`, [ts, plan.id])
+    logActivity(db, String(plan.id), "", "archived", "", `Plan archived: ${plan.name}`)
+    json({ ...plan, status: "archived", updated_at: ts })
+    return
+  }
+
+  const maxAge = parseDuration(olderThan!)
+  const cutoff = now() - maxAge
+  const candidates = db
+    .query(`SELECT * FROM plan WHERE status IN ('draft', 'active') AND updated_at < ? ORDER BY updated_at ASC`)
+    .all(cutoff) as Array<Record<string, unknown>>
+
+  const ts = now()
+  for (const plan of candidates) {
+    db.run(`UPDATE plan SET status = 'archived', updated_at = ? WHERE id = ?`, [ts, plan.id])
+    logActivity(db, String(plan.id), "", "archived", "", `Plan archived by age threshold: ${olderThan}`)
+  }
+
+  json(candidates.map((plan) => ({ ...plan, status: "archived", updated_at: ts })))
 }
 
 function planGet(db: Database, args: string[]) {
@@ -360,6 +416,7 @@ Commands:
   plan create   --title <t> [--name <n>] [--description <d>] [--document <d>] [--created-by <name>]
   plan list     [--status <s>]
   plan get      <plan-id|plan-name>
+  plan archive  <plan-id|plan-name> | --older-than <12h|7d|2w>
   plan update   <plan-id|plan-name> [--name <n>] [--title <t>] [--description <d>] [--document <d>] [--status <s>]
 
   task create   --plan <plan-id|plan-name> --title <t> [--description <d>] [--priority <n>] [--depends-on <ids>]
@@ -408,6 +465,7 @@ try {
     if (sub === "create") planCreate(db, rest)
     else if (sub === "list") planList(db, rest)
     else if (sub === "get") planGet(db, rest)
+    else if (sub === "archive") planArchive(db, rest)
     else if (sub === "update") planUpdate(db, rest)
     else die(`unknown plan subcommand: ${sub}`)
   } else if (cmd === "task") {

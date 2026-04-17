@@ -12,6 +12,11 @@ Cross-session plan tracking for AI agents, backed by SQLite.
 - Agent-oriented workflow with coordinator and worker roles
 - Automatic database migration from legacy `.opencode/agentbook.db` when needed
 
+## TL;DR — how to use the agents
+
+- Select `coordinator` as your active agent (set it as your default or switch to it in opencode) — it plans and keeps track of your work across sessions and worktrees. Do not just `@coordinator` from another agent; actually talk to `coordinator` as your active agent.
+- Only `@`-mention other agents like `@worker` when you want a specific task done and want to bypass plan creation — and even then, keep `coordinator` as your active agent so it can dispatch the work.
+
 ## Requirements
 
 - [Bun](https://bun.sh/)

@@ -27,6 +27,7 @@ type AgentbookTaskRow = {
   id: string
   plan_id: string
   title: string
+  description: string | null
   status: string
   priority: number
   assignee: string | null
@@ -665,6 +666,7 @@ type ProjectSummary = {
 type TaskDetails = {
   id: string
   title: string
+  description: string
   status: string
   priority: number
   assignee: string
@@ -900,6 +902,7 @@ function loadProjectDetails(projectId: string): ProjectDetails {
         tasks: tasks.map((task) => ({
           id: task.id,
           title: task.title,
+          description: task.description ?? "",
           status: task.status,
           priority: task.priority ?? 0,
           assignee: task.assignee ?? "",
@@ -1202,6 +1205,8 @@ function taskColumnKey(status: string): (typeof TASK_STATUS_COLUMNS)[number]["ke
 }
 
 function renderTaskCard(task: TaskDetails): string {
+  const description = String(task.description || "")
+  const hasDescription = Boolean(description.trim())
   const metadata = [
     task.assignee ? `@${escapeHtml(task.assignee)}` : "Unassigned",
     `Updated ${escapeHtml(formatRelative(task.updated_at || task.created_at))}`,
@@ -1216,6 +1221,16 @@ function renderTaskCard(task: TaskDetails): string {
           <div class="meta" style="margin-top: 6px;">${statusBadge(task.status || "pending")}</div>
         </div>
       </div>
+      ${
+        hasDescription
+          ? `
+            <details class="document-details">
+              <summary class="document-summary">Description</summary>
+              <pre class="document-body">${escapeHtml(description)}</pre>
+            </details>
+          `
+          : ""
+      }
       <div class="task-card-meta">
         ${metadata.map((item) => `<span>${item}</span>`).join("")}
       </div>

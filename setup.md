@@ -88,6 +88,33 @@ To avoid permission prompts for agentbook commands, add to your config:
 }
 ```
 
+### 6. Deny out-of-workspace access (recommended)
+
+Strongly recommended for agentbook coordinator/worker/explore flows.
+
+```jsonc
+{
+  "permission": {
+    "external_directory": {
+      "*": "deny",
+      "/tmp/opencode/*": "allow"
+    }
+  }
+}
+```
+
+Why:
+
+- opencode defaults `permission.external_directory` to `ask`, which prompts any time a tool (`read`, `edit`, `glob`, `grep`, `bash`, ...) touches a path outside the workspace.
+- Worker and explore subagents frequently produce path typos on long paths or reach for adjacent paths; each one triggers a prompt.
+- If the user REJECTS an interactive `ask` prompt, subagents often STOP mid-task instead of recovering, which breaks coordinator-driven flows.
+- `"deny"` returns a recoverable tool-error instead, so the model sees the error, fixes the path or moves on, and keeps going.
+- Use the object form with catch-all `"*": "deny"` instead of scalar `"deny"` so you can layer specific allow rules on top. Rules are last-match-wins, so listed allows override the catch-all.
+
+Keep `"/tmp/opencode/*": "allow"` to stay compatible with the `tmp-folder` instruction that ships with agentbook.
+
+See [opencode external_directory docs](https://opencode.ai/docs/permissions/#external-directories) for details.
+
 ## Usage
 
 ### Create a plan

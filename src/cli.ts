@@ -90,16 +90,6 @@ function migrate(db: Database) {
   )`)
   db.run(`CREATE INDEX IF NOT EXISTS task_plan_idx ON task(plan_id)`)
   db.run(`CREATE INDEX IF NOT EXISTS task_status_idx ON task(status)`)
-  db.run(`CREATE TABLE IF NOT EXISTS activity (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    plan_id TEXT NOT NULL REFERENCES plan(id) ON DELETE CASCADE,
-    task_id TEXT DEFAULT '',
-    action TEXT NOT NULL,
-    agent TEXT DEFAULT '',
-    detail TEXT DEFAULT '',
-    created_at INTEGER NOT NULL
-  )`)
-  db.run(`CREATE INDEX IF NOT EXISTS activity_plan_idx ON activity(plan_id)`)
 }
 
 const now = () => Date.now()
@@ -166,17 +156,6 @@ function die(msg: string): never {
   process.exit(1)
 }
 
-function logActivity(db: Database, plan: string, task: string, action: string, agent: string, detail: string) {
-  db.run(`INSERT INTO activity (plan_id, task_id, action, agent, detail, created_at) VALUES (?, ?, ?, ?, ?, ?)`, [
-    plan,
-    task,
-    action,
-    agent,
-    detail,
-    now(),
-  ])
-}
-
 function planCreate(db: Database, args: string[]) {
   const title = flag(args, "--title")
   if (!title) die("--title is required")
@@ -190,7 +169,6 @@ function planCreate(db: Database, args: string[]) {
     `INSERT INTO plan (id, name, title, description, document, status, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'draft', ?, ?, ?)`,
     [id, name, title, description, document, by, ts, ts],
   )
-  logActivity(db, id, "", "created", "", `Plan created: ${name}`)
   json({ id, name, title, description, document, status: "draft", created_by: by, created_at: ts })
 }
 
@@ -216,7 +194,6 @@ function planArchive(db: Database, args: string[]) {
     const plan = existing as Record<string, unknown>
     const ts = now()
     db.run(`UPDATE plan SET status = 'archived', updated_at = ? WHERE id = ?`, [ts, plan.id])
-    logActivity(db, String(plan.id), "", "archived", "", `Plan archived: ${plan.name}`)
     json({ ...plan, status: "archived", updated_at: ts })
     return
   }
@@ -230,7 +207,6 @@ function planArchive(db: Database, args: string[]) {
   const ts = now()
   for (const plan of candidates) {
     db.run(`UPDATE plan SET status = 'archived', updated_at = ? WHERE id = ?`, [ts, plan.id])
-    logActivity(db, String(plan.id), "", "archived", "", `Plan archived by age threshold: ${olderThan}`)
   }
 
   json(candidates.map((plan) => ({ ...plan, status: "archived", updated_at: ts })))
@@ -274,12 +250,6 @@ function planUpdate(db: Database, args: string[]) {
     ts,
     id,
   ])
-  if (status !== existing.status) {
-    logActivity(db, id, "", "status_changed", "", `Plan status: ${existing.status} -> ${status}`)
-  }
-  if (changedFields.length > 0) {
-    logActivity(db, id, "", "plan_updated", "", `Plan "${existing.title}" updated fields: ${changedFields.join(", ")}`)
-  }
   json({ id, name, title, description, document, status, updated_at: ts })
 }
 
@@ -302,7 +272,6 @@ function taskCreate(db: Database, args: string[]) {
     `INSERT INTO task (id, plan_id, title, description, status, priority, position, depends_on, created_at, updated_at) VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?)`,
     [id, planId, title, description, priority, position, depends, ts, ts],
   )
-  logActivity(db, planId, id, "task_created", "", `Task created: ${title}`)
   json({ id, plan_id: planId, title, description, status: "pending", priority, position, depends_on: depends })
 }
 
@@ -382,19 +351,6 @@ function taskUpdate(db: Database, args: string[]) {
     `UPDATE task SET title = ?, description = ?, status = ?, priority = ?, assignee = ?, worktree_dir = ?, session_id = ?, depends_on = ?, notes = ?, updated_at = ? WHERE id = ?`,
     [title, description, status, priority, assignee, worktree, session, dependsOn, notes, ts, id],
   )
-  if (status !== existing.status) {
-    logActivity(
-      db,
-      existing.plan_id,
-      id,
-      "task_status_changed",
-      assignee,
-      `Task "${existing.title}": ${existing.status} -> ${status}`,
-    )
-  }
-  if (changedFields.length > 0) {
-    logActivity(db, existing.plan_id, id, "task_updated", assignee, `Task "${title}" updated fields: ${changedFields.join(", ")}`)
-  }
   json({
     ...existing,
     title,
@@ -408,31 +364,6 @@ function taskUpdate(db: Database, args: string[]) {
     depends_on: dependsOn,
     updated_at: ts,
   })
-}
-
-function activityCreate(db: Database, args: string[]) {
-  const planRef = flag(args, "--plan")
-  if (!planRef) die("--plan is required")
-  const plan = resolvePlan(db, planRef)
-  if (!plan) die(`plan not found: ${planRef}`)
-  const task = flag(args, "--task") || ""
-  const action = flag(args, "--action") || "note"
-  const detail = flag(args, "--detail") || ""
-  const agent = flag(args, "--agent") || ""
-  logActivity(db, (plan as { id: string }).id, task, action, agent, detail)
-  json({ ok: true })
-}
-
-function activityList(db: Database, args: string[]) {
-  const planRef = flag(args, "--plan")
-  if (!planRef) die("--plan is required")
-  const plan = resolvePlan(db, planRef)
-  if (!plan) die(`plan not found: ${planRef}`)
-  const limit = parseInt(flag(args, "--limit") || "20", 10)
-  const rows = db
-    .query(`SELECT * FROM activity WHERE plan_id = ? ORDER BY created_at DESC LIMIT ?`)
-    .all((plan as { id: string }).id, limit)
-  json(rows)
 }
 
 function summary(db: Database, args: string[]) {
@@ -454,10 +385,6 @@ function summary(db: Database, args: string[]) {
   const done = counts["completed"] || 0
   const needsReview = counts["needs_review"] || 0
   const progress = total > 0 ? Math.round((done / total) * 100) : 0
-  const recent = db
-    .query(`SELECT * FROM activity WHERE plan_id = ? ORDER BY created_at DESC LIMIT 5`)
-    .all(planId) as Array<{ action: string; detail: string; agent: string; created_at: number }>
-
   json({
     plan: { id: plan.id, name: plan.name, title: plan.title, status: plan.status, description: plan.description, document: plan.document },
     progress: { total, completed: done, needs_review: needsReview, percentage: progress, by_status: counts },
@@ -467,12 +394,6 @@ function summary(db: Database, args: string[]) {
       status: t.status,
       assignee: t.assignee || null,
       worktree_dir: t.worktree_dir || null,
-    })),
-    recent_activity: recent.map((a) => ({
-      action: a.action,
-      detail: a.detail,
-      agent: a.agent || null,
-      created_at: a.created_at,
     })),
   })
 }
@@ -493,9 +414,6 @@ Commands:
   task list     [--plan <plan-id|plan-name>] [--status <s>]
   task get      <task-id>
   task update   <task-id> [--status <s>] [--assignee <a>] [--notes <n>] [--session <sid>] [--worktree <dir>] [--title <t>] [--description <d>] [--priority <n>] [--depends-on <ids>]
-
-  log create    --plan <plan-id|plan-name> [--task <task-id>] [--action <a>] [--detail <d>] [--agent <name>]
-  log list      --plan <plan-id|plan-name> [--limit <n>]
 
   summary       <plan-id|plan-name>
   ui [--port <n>]   Launch the dashboard web UI (default port: 3141)
@@ -544,10 +462,6 @@ try {
     else if (sub === "get") taskGet(db, rest)
     else if (sub === "update") taskUpdate(db, rest)
     else die(`unknown task subcommand: ${sub}`)
-  } else if (cmd === "log") {
-    if (sub === "create") activityCreate(db, rest)
-    else if (sub === "list") activityList(db, rest)
-    else die(`unknown log subcommand: ${sub}`)
   } else if (cmd === "summary") {
     summary(db, rest.length ? rest : args.slice(1))
   } else {

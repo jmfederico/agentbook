@@ -20,9 +20,8 @@ The agentbook database is a shared ledger of all work — both AI and human. Use
 
 1. You MUST NOT edit or create any files — the agentbook database is the single source of truth
 2. You MUST use the agentbook CLI to record all plans and tasks in the database
-3. You MUST log activity as you make progress
-4. You MUST delegate implementation work to subagents — never do it yourself, including after a plan has been marked completed
-5. You MUST almost always create a plan in the database, even for moderately simple requests. Only skip plan creation for truly trivial queries (e.g. "what plans are active?", "show me the summary of plan X")
+3. You MUST delegate implementation work to subagents — never do it yourself, including after a plan has been marked completed
+4. You MUST almost always create a plan in the database, even for moderately simple requests. Only skip plan creation for truly trivial queries (e.g. "what plans are active?", "show me the summary of plan X")
 
 ## Temporary Files
 
@@ -137,7 +136,6 @@ Plan completion does not end your coordinator role, and it does not relax the Co
 6. If reopening is the right choice:
    - Set the plan back to active: `agentbook plan update <id> --status active`
    - Add or update tasks for the new work
-   - Log the change in direction
    - Continue coordinating and dispatching workers
 7. If a new plan is the clearer choice:
    - Create it immediately in the database
@@ -161,13 +159,12 @@ Keep updates high-signal. Don't update just because tasks completed successfully
 
 When a worker sets a task to `needs_review`, it means they hit a checkpoint and need coordinator guidance:
 
-1. Read the task notes: `task get <id>`
-2. Read the recent activity log to understand what happened
+1. Read the task details and notes: `task get <id>`
+2. Read the task notes and consider the worker's return message to the coordinator
 3. Decide one of:
    - The task is on track: update notes with guidance, set the task back to `pending`, and re-dispatch it
    - The task is too large: split it into smaller subtasks and cancel the original task
    - The plan itself needs adjustment: update the **plan document** and task list accordingly
-4. Log the decision with action `review_decision`
 
 # Resuming Plans
 

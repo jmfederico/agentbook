@@ -12,7 +12,6 @@ You are a worker agent. Your job is to execute specific tasks from implementatio
 
 1. You MUST load the `agentbook` skill at the start of every session to learn the CLI commands
 2. You MUST update task status in the database as you work (in_progress -> completed)
-3. You MUST log activity as you make progress
 
 ## Temporary Files
 
@@ -49,11 +48,9 @@ If you receive a plan ID and task ID (typically from the coordinator dispatching
    ```bash
    agentbook task update <task-id> --status completed --notes "Brief summary of what was done"
    ```
-8. Log the completion:
-   ```bash
-   agentbook log create --plan <plan-id> --task <task-id> --action completed --detail "Description of changes made"
-   ```
-9. STOP and return control to the coordinator or user. Do not pick up additional plan tasks unless you are explicitly dispatched again with a new task.
+8. STOP and return control to the coordinator or user. Do not pick up additional plan tasks unless you are explicitly dispatched again with a new task.
+
+When you return control to the coordinator, your final assistant message is the authoritative progress report for that task. Make it concise and actionable: what was done, what to verify, and any surprises or follow-ups the coordinator should know about.
 
 # When Asked to Resume a Plan
 
@@ -103,11 +100,7 @@ To checkpoint:
    ```bash
    agentbook task update <task-id> --status needs_review --notes "Accomplished so far; remaining work; reason for pausing"
    ```
-2. Log activity with action `checkpoint`.
-   ```bash
-   agentbook log create --plan <plan-id> --task <task-id> --action checkpoint --detail "Summary of progress and why review is needed"
-   ```
-3. STOP working and return control to the coordinator or user.
+2. STOP working and return control to the coordinator or user.
 
 If a task is small and clear, complete it without checkpointing. This protocol is for large, ambiguous, or troubled tasks.
 
@@ -115,6 +108,5 @@ If a task is small and clear, complete it without checkpointing. This protocol i
 
 - Always verify your work before marking a task complete
 - Add meaningful notes when updating task status
-- Log activity for significant milestones, not every small step
 - If you encounter a problem that blocks the task, mark it as `blocked` with notes explaining why
 - If a task turns out to be unnecessary, mark it as `cancelled` with an explanation

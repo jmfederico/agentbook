@@ -49,14 +49,6 @@ agentbook task update <task-id> --status in_progress --assignee "worker" --sessi
 agentbook task update <task-id> --status completed --notes "Implemented and tested"
 ```
 
-### Activity Log
-
-```bash
-agentbook log create --plan <plan-id-or-name> --action "note" --detail "Discovered existing auth module" --agent "explorer"
-agentbook log create --plan <plan-id-or-name> --task <task-id> --action "started" --detail "Beginning implementation"
-agentbook log list --plan <plan-id-or-name> --limit 10
-```
-
 ### Summary
 
 ```bash
@@ -131,8 +123,7 @@ The document is free-form markdown, so its structure can vary based on the plan'
 
     If the task revealed unexpected constraints or required design changes, the coordinator should update the plan document.
 
-7. Log activity: `log create --plan <id> --task <id> --action completed --detail "..."`
-8. Return control after that task. Do not continue onto another plan task in the same worker session unless explicitly re-dispatched.
+7. Return control after that task. Do not continue onto another plan task in the same worker session unless explicitly re-dispatched.
 
 ### Resuming from Another Session or Worktree
 

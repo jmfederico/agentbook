@@ -37,13 +37,6 @@ type AgentbookTaskRow = {
   updated_at: number
 }
 
-type AgentbookActivityRow = {
-  action: string
-  detail: string | null
-  agent: string | null
-  created_at: number
-}
-
 type CountRow = { count: number }
 
 const DEFAULT_PORT = 3141
@@ -697,7 +690,6 @@ type ProjectDetails = {
     has_agentbook: boolean
   }
   plans: PlanDetails[]
-  activity: Array<{ action: string; detail: string; agent: string; created_at: number }>
 }
 
 type ProjectDbInfo = {
@@ -879,7 +871,6 @@ function loadProjectDetails(projectId: string): ProjectDetails {
       has_agentbook: agentbookDbPath !== null,
     },
     plans: [] as PlanDetails[],
-    activity: [] as Array<{ action: string; detail: string; agent: string; created_at: number }>,
   }
 
   if (!agentbookDbPath) return response
@@ -913,16 +904,6 @@ function loadProjectDetails(projectId: string): ProjectDetails {
         })),
       }
     })
-
-    const activity = agentbookDb.query(`SELECT * FROM activity ORDER BY created_at DESC LIMIT 50`).all() as AgentbookActivityRow[]
-
-    response.activity = activity.map((entry) => ({
-      action: entry.action,
-      detail: entry.detail ?? "",
-      agent: entry.agent ?? "",
-      created_at: entry.created_at,
-    }))
-
     return response
   })
 }
@@ -1335,40 +1316,9 @@ function renderPlanFrame(projectId: string, plan: PlanDetails, includeSrc = true
   `
 }
 
-function renderActivityItem(entry: { action: string; detail: string; agent: string; created_at: number }): string {
-  return `
-    <article class="timeline-item">
-      <div class="timeline-meta">
-        <span>${escapeHtml(formatRelative(entry.created_at))}</span>
-        <span class="badge action">${escapeHtml(entry.action || "activity")}</span>
-        ${entry.agent ? `<span>by ${escapeHtml(entry.agent)}</span>` : ""}
-      </div>
-      <div class="timeline-detail">${escapeHtml(entry.detail || "No detail provided.")}</div>
-    </article>
-  `
-}
-
-function renderActivitySection(activityEntries: Array<{ action: string; detail: string; agent: string; created_at: number }>): string {
-  const activity = Array.isArray(activityEntries) ? activityEntries.slice(0, 20) : []
-
-  return `
-    <section class="panel" id="activity-section">
-      <div class="section-header">
-        <h3 class="section-title">Recent Activity</h3>
-        <div class="meta">Last ${Math.min(activity.length, 20)} entries</div>
-      </div>
-      ${activity.length ? `<div class="timeline">${activity.map(renderActivityItem).join("")}</div>` : '<div class="empty"><h4 class="empty-title">No recent activity</h4><p class="empty-copy">Task updates and notes will appear here.</p></div>'}
-    </section>
-  `
-}
-
 function planFingerprint(plan: PlanDetails): number {
   const taskTimestamps = Array.isArray(plan.tasks) ? plan.tasks.map((task) => Number(task.updated_at) || 0) : []
   return Math.max(Number(plan.updated_at) || 0, ...taskTimestamps)
-}
-
-function activityFingerprint(activityEntries: Array<{ created_at: number }>): number {
-  return Math.max(0, ...activityEntries.map((entry) => Number(entry.created_at) || 0))
 }
 
 function sseEvent(payload: string): string {
@@ -1394,7 +1344,6 @@ function renderProjectStreamResponse(projectId: string, request: Request): Respo
   let { agentbookDbPath } = openProjectDb(projectId)
   let previousPlans = filterPlans(initialSnapshot.plans)
   let previousFingerprints = new Map(previousPlans.map((plan) => [plan.id, planFingerprint(plan)]))
-  let previousActivityFingerprint = activityFingerprint(initialSnapshot.activity)
 
   const headers = new Headers({
     "Content-Type": "text/event-stream",
@@ -1498,15 +1447,8 @@ function renderProjectStreamResponse(projectId: string, request: Request): Respo
                 send(sseEvent(turboStream("remove", planCardId(plan.id))))
               }
             }
-
-            const nextActivityFingerprint = activityFingerprint(nextSnapshot.activity)
-            if (nextActivityFingerprint !== previousActivityFingerprint) {
-              send(sseEvent(turboStream("replace", "activity-section", renderActivitySection(nextSnapshot.activity), "morph")))
-            }
-
             previousPlans = nextPlans
             previousFingerprints = nextFingerprints
-            previousActivityFingerprint = nextActivityFingerprint
             openCodeVersion = nextOpenCodeVersion
             agentbookDbPath = nextAgentbookDbPath
             agentbookVersion = nextAgentbookVersion
@@ -1548,7 +1490,6 @@ function renderProjectStreamResponse(projectId: string, request: Request): Respo
 function renderDetail(detail: ProjectDetails): string {
   const project = detail.project
   const allPlans = Array.isArray(detail.plans) ? detail.plans : []
-  const activity = Array.isArray(detail.activity) ? detail.activity.slice(0, 20) : []
   const now = Date.now()
   const archivedCount = allPlans.filter((plan) => plan.status === "archived").length
   const olderCompletedHiddenCount = allPlans.filter(
@@ -1607,14 +1548,11 @@ function renderDetail(detail: ProjectDetails): string {
         <div class="plan-list" id="plan-list"><div class="empty" id="plan-list-empty"><h4 class="empty-title">No plans yet</h4><p class="empty-copy">This project does not have any tracked plans.</p></div></div>
       </section>
     `
-
-  const activitySection = renderActivitySection(activity)
-
   return renderShell(
     `${project.name} · Agentbook Dashboard`,
     `Viewing ${project.name}. Live updates enabled.`,
     projectHref(project.id),
-    `${header}<div class="stack">${plansSection}${activitySection}</div><turbo-stream-source src="/streams/projects/${escapeHtml(encodeURIComponent(project.id))}"></turbo-stream-source>`,
+    `${header}<div class="stack">${plansSection}</div><turbo-stream-source src="/streams/projects/${escapeHtml(encodeURIComponent(project.id))}"></turbo-stream-source>`,
     "none",
   )
 }

@@ -38,7 +38,20 @@ ln -s ~/agentbook/agents/coordinator.md ~/.config/opencode/agents/coordinator.md
 ln -s ~/agentbook/agents/worker.md ~/.config/opencode/agents/worker.md
 ```
 
-### 3. Configure models (optional)
+### 3. Make coordinator the default agent (recommended)
+
+Strongly recommend setting `"default_agent": "coordinator"` in `~/.config/opencode/opencode.json` or a project-local `opencode.json` so new sessions start in the right place immediately.
+
+```jsonc
+{
+  "$schema": "https://opencode.ai/config.json",
+  "default_agent": "coordinator"
+}
+```
+
+See [opencode default_agent docs](https://opencode.ai/docs/config/#default-agent) for details.
+
+### 4. Configure models (optional)
 
 Override agent models per-project in `opencode.json`:
 
@@ -57,7 +70,7 @@ Override agent models per-project in `opencode.json`:
 
 Or globally in `~/.config/opencode/opencode.json`.
 
-### 4. Pre-allow bash permissions (optional)
+### 5. Pre-allow bash permissions (optional)
 
 To avoid permission prompts for agentbook commands, add to your config:
 

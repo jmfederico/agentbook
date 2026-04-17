@@ -48,6 +48,8 @@ type CountRow = { count: number }
 const DEFAULT_PORT = 3141
 const OPENCODE_DB_PATH = path.join(os.homedir(), ".local", "share", "opencode", "opencode.db")
 const REFRESH_MS = 10_000
+const STREAM_POLL_MS = 3_000
+const STREAM_KEEPALIVE_MS = 15_000
 const TWO_DAYS_MS = 2 * 24 * 60 * 60 * 1000
 
 const TASK_ICONS: Record<string, string> = {
@@ -696,6 +698,15 @@ type ProjectDetails = {
   activity: Array<{ action: string; detail: string; agent: string; created_at: number }>
 }
 
+type ProjectDbInfo = {
+  project: OpenCodeProjectRow
+  agentbookDbPath: string | null
+}
+
+type DataVersionRow = {
+  data_version: number
+}
+
 function shellQuote(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`
 }
@@ -716,6 +727,17 @@ function withReadonlyDatabase<T>(databasePath: string, fn: (db: Database) => T):
   } finally {
     db.close()
   }
+}
+
+function readDataVersion(db: Database): number {
+  const row = db.query("PRAGMA data_version").get() as DataVersionRow | null
+  return Number(row?.data_version ?? 0)
+}
+
+function getDataVersion(databasePath: string): number {
+  return withReadonlyDatabase(databasePath, (db) => {
+    return readDataVersion(db)
+  })
 }
 
 function safeDirectoryExists(directoryPath: string): boolean {
@@ -749,6 +771,27 @@ function findAgentbookDbPath(worktree: string): string | null {
 
   const fallbackDbPath = path.join(worktree, ".opencode", "agentbook.db")
   return fs.existsSync(fallbackDbPath) ? fallbackDbPath : null
+}
+
+function openProjectDb(projectId: string): ProjectDbInfo {
+  return withReadonlyDatabase(OPENCODE_DB_PATH, (openCodeDb) => {
+    const project = openCodeDb
+      .query(`SELECT id, worktree, name, icon_color, time_created FROM project WHERE id = ?`)
+      .get(projectId) as OpenCodeProjectRow | null
+
+    if (!project) {
+      throw new Response("Project not found", { status: 404 })
+    }
+
+    if (!safeDirectoryExists(project.worktree)) {
+      throw new Response("Project worktree not found", { status: 404 })
+    }
+
+    return {
+      project,
+      agentbookDbPath: findAgentbookDbPath(project.worktree),
+    }
+  })
 }
 
 function htmlResponse(body: string, init: ResponseInit = {}): Response {
@@ -823,81 +866,61 @@ function loadProjectSummaries(): ProjectSummary[] {
 }
 
 function loadProjectDetails(projectId: string): ProjectDetails {
-  return withReadonlyDatabase(OPENCODE_DB_PATH, (openCodeDb) => {
-    const project = openCodeDb
-      .query(`SELECT id, worktree, name, icon_color, time_created FROM project WHERE id = ?`)
-      .get(projectId) as OpenCodeProjectRow | null
+  const { project, agentbookDbPath } = openProjectDb(projectId)
 
-    if (!project) {
-      throw new Response("Project not found", { status: 404 })
-    }
+  const response = {
+    project: {
+      id: project.id,
+      worktree: project.worktree,
+      name: projectName(project.name, project.worktree),
+      icon_color: project.icon_color,
+      has_agentbook: agentbookDbPath !== null,
+    },
+    plans: [] as PlanDetails[],
+    activity: [] as Array<{ action: string; detail: string; agent: string; created_at: number }>,
+  }
 
-    if (!safeDirectoryExists(project.worktree)) {
-      throw new Response("Project worktree not found", { status: 404 })
-    }
+  if (!agentbookDbPath) return response
 
-    const agentbookDbPath = findAgentbookDbPath(project.worktree)
+  return withReadonlyDatabase(agentbookDbPath, (agentbookDb) => {
+    const plans = agentbookDb.query(`SELECT * FROM plan ORDER BY created_at DESC`).all() as AgentbookPlanRow[]
 
-    const response = {
-      project: {
-        id: project.id,
-        worktree: project.worktree,
-        name: projectName(project.name, project.worktree),
-        icon_color: project.icon_color,
-        has_agentbook: agentbookDbPath !== null,
-      },
-      plans: [] as PlanDetails[],
-      activity: [] as Array<{ action: string; detail: string; agent: string; created_at: number }>,
-    }
+    response.plans = plans.map((plan) => {
+      const tasks = agentbookDb.query(`SELECT * FROM task WHERE plan_id = ? ORDER BY position`).all(plan.id) as AgentbookTaskRow[]
 
-    if (!agentbookDbPath) return response
-
-    return withReadonlyDatabase(agentbookDbPath, (agentbookDb) => {
-      const plans = agentbookDb
-        .query(`SELECT * FROM plan ORDER BY created_at DESC`)
-        .all() as AgentbookPlanRow[]
-
-      response.plans = plans.map((plan) => {
-        const tasks = agentbookDb
-          .query(`SELECT * FROM task WHERE plan_id = ? ORDER BY position`)
-          .all(plan.id) as AgentbookTaskRow[]
-
-        return {
-          id: plan.id,
-          name: plan.name,
-          title: plan.title,
-          status: plan.status,
-          description: plan.description ?? "",
-          document: plan.document ?? "",
-          created_at: plan.created_at,
-          updated_at: plan.updated_at,
-          tasks: tasks.map((task) => ({
-            id: task.id,
-            title: task.title,
-            status: task.status,
-            priority: task.priority ?? 0,
-            assignee: task.assignee ?? "",
-            session_id: task.session_id ?? "",
-            notes: task.notes ?? "",
-            created_at: task.created_at,
-            updated_at: task.updated_at,
-          })),
-        }
-      })
-
-      const activity = agentbookDb
-        .query(`SELECT * FROM activity ORDER BY created_at DESC LIMIT 50`)
-        .all() as AgentbookActivityRow[]
-
-      response.activity = activity.map((entry) => ({
-        action: entry.action,
-        detail: entry.detail ?? "",
-        agent: entry.agent ?? "",
-        created_at: entry.created_at,
-      }))
-
-      return response
+      return {
+        id: plan.id,
+        name: plan.name,
+        title: plan.title,
+        status: plan.status,
+        description: plan.description ?? "",
+        document: plan.document ?? "",
+        created_at: plan.created_at,
+        updated_at: plan.updated_at,
+        tasks: tasks.map((task) => ({
+          id: task.id,
+          title: task.title,
+          status: task.status,
+          priority: task.priority ?? 0,
+          assignee: task.assignee ?? "",
+          session_id: task.session_id ?? "",
+          notes: task.notes ?? "",
+          created_at: task.created_at,
+          updated_at: task.updated_at,
+        })),
+      }
     })
+
+    const activity = agentbookDb.query(`SELECT * FROM activity ORDER BY created_at DESC LIMIT 50`).all() as AgentbookActivityRow[]
+
+    response.activity = activity.map((entry) => ({
+      action: entry.action,
+      detail: entry.detail ?? "",
+      agent: entry.agent ?? "",
+      created_at: entry.created_at,
+    }))
+
+    return response
   })
 }
 
@@ -972,6 +995,14 @@ function frameId(planId: string): string {
   return `plan-${planId}`
 }
 
+function planCardId(planId: string): string {
+  return `plan-card-${planId}`
+}
+
+function planSummaryId(planId: string): string {
+  return `plan-summary-${planId}`
+}
+
 function projectHref(projectId: string): string {
   return `/projects/${encodeURIComponent(projectId)}`
 }
@@ -988,7 +1019,11 @@ function decodePathSegment(value: string, label: string): string {
   }
 }
 
-function renderAutoRefreshScript(mode: "page" | "frames"): string {
+function renderAutoRefreshScript(mode: "page" | "frames" | "none"): string {
+  if (mode === "none") {
+    return ""
+  }
+
   if (mode === "frames") {
     return `
   <script>
@@ -1022,7 +1057,7 @@ function renderShell(
   subtitle: string,
   currentPath: string,
   content: string,
-  refreshMode: "page" | "frames" = "page",
+  refreshMode: "page" | "frames" | "none" = "page",
 ): string {
   return `<!DOCTYPE html>
 <html lang="en">
@@ -1182,7 +1217,7 @@ function renderPlanSummary(plan: PlanDetails): string {
   const copyText = JSON.stringify(`${plan.id} ${plan.name}`)
 
   return `
-    <summary class="plan-summary">
+    <summary class="plan-summary" id="${escapeHtml(planSummaryId(plan.id))}">
       <div class="plan-summary-main">
         <span class="plan-chevron" aria-hidden="true"><span class="when-closed">▶</span><span class="when-open">▼</span></span>
         <div class="plan-summary-copy">
@@ -1216,7 +1251,7 @@ function renderPlanBody(plan: PlanDetails): string {
       ${
         document
           ? `
-            <details class="document-details">
+            <details class="document-details" id="${escapeHtml(`plan-doc-${plan.id}`)}">
               <summary class="document-summary">Plan document</summary>
               <pre class="document-body">${escapeHtml(document)}</pre>
             </details>
@@ -1233,7 +1268,7 @@ function renderPlanFrame(projectId: string, plan: PlanDetails, includeSrc = true
   const srcAttribute = includeSrc ? ` src="${escapeHtml(planFrameHref(projectId, plan.id))}"` : ""
 
   return `
-    <details class="plan-card"${openAttribute}>
+    <details class="plan-card" id="${escapeHtml(planCardId(plan.id))}"${openAttribute}>
       ${renderPlanSummary(plan)}
       <turbo-frame id="${escapeHtml(frameId(plan.id))}"${srcAttribute}>
         ${renderPlanBody(plan)}
@@ -1253,6 +1288,203 @@ function renderActivityItem(entry: { action: string; detail: string; agent: stri
       <div class="timeline-detail">${escapeHtml(entry.detail || "No detail provided.")}</div>
     </article>
   `
+}
+
+function renderActivitySection(activityEntries: Array<{ action: string; detail: string; agent: string; created_at: number }>): string {
+  const activity = Array.isArray(activityEntries) ? activityEntries.slice(0, 20) : []
+
+  return `
+    <section class="panel" id="activity-section">
+      <div class="section-header">
+        <h3 class="section-title">Recent Activity</h3>
+        <div class="meta">Last ${Math.min(activity.length, 20)} entries</div>
+      </div>
+      ${activity.length ? `<div class="timeline">${activity.map(renderActivityItem).join("")}</div>` : '<div class="empty"><h4 class="empty-title">No recent activity</h4><p class="empty-copy">Task updates and notes will appear here.</p></div>'}
+    </section>
+  `
+}
+
+function planFingerprint(plan: PlanDetails): number {
+  const taskTimestamps = Array.isArray(plan.tasks) ? plan.tasks.map((task) => Number(task.updated_at) || 0) : []
+  return Math.max(Number(plan.updated_at) || 0, ...taskTimestamps)
+}
+
+function activityFingerprint(activityEntries: Array<{ created_at: number }>): number {
+  return Math.max(0, ...activityEntries.map((entry) => Number(entry.created_at) || 0))
+}
+
+function sseEvent(payload: string): string {
+  const normalized = payload.replaceAll("\r\n", "\n")
+  return `${normalized.split("\n").map((line) => `data: ${line}`).join("\n")}\n\n`
+}
+
+function sseComment(): string {
+  return `:\n\n`
+}
+
+function turboStream(action: string, target: string, template?: string, method?: "morph"): string {
+  const methodAttribute = method ? ` method="${method}"` : ""
+  if (template === undefined) {
+    return `<turbo-stream action="${action}"${methodAttribute} target="${escapeHtml(target)}"></turbo-stream>`
+  }
+
+  return `<turbo-stream action="${action}"${methodAttribute} target="${escapeHtml(target)}">\n<template>\n${template}\n</template>\n</turbo-stream>`
+}
+
+function renderProjectStreamResponse(projectId: string, request: Request): Response {
+  const initialSnapshot = loadProjectDetails(projectId)
+  let { agentbookDbPath } = openProjectDb(projectId)
+  let previousPlans = filterPlans(initialSnapshot.plans)
+  let previousFingerprints = new Map(previousPlans.map((plan) => [plan.id, planFingerprint(plan)]))
+  let previousActivityFingerprint = activityFingerprint(initialSnapshot.activity)
+
+  const headers = new Headers({
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache",
+    Connection: "keep-alive",
+  })
+
+  const encoder = new TextEncoder()
+  let cleanup = () => {}
+
+  return new Response(
+    new ReadableStream({
+      start(controller) {
+        let closed = false
+        let polling = false
+        let pollTimer: ReturnType<typeof setInterval> | null = null
+        let keepAliveTimer: ReturnType<typeof setInterval> | null = null
+        const openCodeDb = openReadonlyDatabase(OPENCODE_DB_PATH)
+        let agentbookDb = agentbookDbPath ? openReadonlyDatabase(agentbookDbPath) : null
+        let openCodeVersion = readDataVersion(openCodeDb)
+        let agentbookVersion = agentbookDb ? readDataVersion(agentbookDb) : null
+
+        const send = (payload: string) => {
+          if (closed) return
+          try {
+            controller.enqueue(encoder.encode(payload))
+          } catch {
+            cleanup()
+          }
+        }
+
+        cleanup = () => {
+          if (closed) return
+          closed = true
+          if (pollTimer) clearInterval(pollTimer)
+          if (keepAliveTimer) clearInterval(keepAliveTimer)
+          try {
+            agentbookDb?.close()
+          } catch {}
+          try {
+            openCodeDb.close()
+          } catch {}
+          request.signal.removeEventListener("abort", cleanup)
+          try {
+            controller.close()
+          } catch {}
+        }
+
+        const poll = async () => {
+          if (closed || polling) return
+          polling = true
+
+          try {
+            const hadPlansBefore = previousPlans.length > 0
+            const currentProject = openProjectDb(projectId)
+            const nextOpenCodeVersion = readDataVersion(openCodeDb)
+            const nextAgentbookDbPath = currentProject.agentbookDbPath
+
+            if (nextAgentbookDbPath !== agentbookDbPath) {
+              try {
+                agentbookDb?.close()
+              } catch {}
+              agentbookDb = nextAgentbookDbPath ? openReadonlyDatabase(nextAgentbookDbPath) : null
+            }
+
+            const nextAgentbookVersion = agentbookDb ? readDataVersion(agentbookDb) : null
+
+            if (
+              nextOpenCodeVersion === openCodeVersion &&
+              nextAgentbookVersion === agentbookVersion &&
+              nextAgentbookDbPath === agentbookDbPath
+            ) {
+              return
+            }
+
+            const nextSnapshot = loadProjectDetails(projectId)
+            const nextPlans = filterPlans(nextSnapshot.plans)
+            const nextFingerprints = new Map(nextPlans.map((plan) => [plan.id, planFingerprint(plan)]))
+            const nextPlanMap = new Map(nextPlans.map((plan) => [plan.id, plan]))
+
+            if (previousPlans.length === 0 && nextPlans.length > 0) {
+              send(sseEvent(turboStream("remove", "plan-list-empty")))
+            }
+
+            for (const plan of nextPlans) {
+              const previousFingerprint = previousFingerprints.get(plan.id)
+              if (previousFingerprint === undefined) {
+                send(sseEvent(turboStream("prepend", "plan-list", renderPlanFrame(projectId, plan, false))))
+                continue
+              }
+
+              const currentFingerprint = nextFingerprints.get(plan.id)
+              if (previousFingerprint !== currentFingerprint) {
+                send(sseEvent(turboStream("replace", planSummaryId(plan.id), renderPlanSummary(plan), "morph")))
+                send(sseEvent(turboStream("replace", frameId(plan.id), renderPlanBody(plan), "morph")))
+              }
+            }
+
+            for (const plan of previousPlans) {
+              if (!nextPlanMap.has(plan.id)) {
+                send(sseEvent(turboStream("remove", planCardId(plan.id))))
+              }
+            }
+
+            const nextActivityFingerprint = activityFingerprint(nextSnapshot.activity)
+            if (nextActivityFingerprint !== previousActivityFingerprint) {
+              send(sseEvent(turboStream("replace", "activity-section", renderActivitySection(nextSnapshot.activity), "morph")))
+            }
+
+            previousPlans = nextPlans
+            previousFingerprints = nextFingerprints
+            previousActivityFingerprint = nextActivityFingerprint
+            openCodeVersion = nextOpenCodeVersion
+            agentbookDbPath = nextAgentbookDbPath
+            agentbookVersion = nextAgentbookVersion
+
+            if (hadPlansBefore && nextPlans.length === 0) {
+              send(
+                sseEvent(
+                  turboStream(
+                    "prepend",
+                    "plan-list",
+                    '<div class="empty" id="plan-list-empty"><h4 class="empty-title">No plans yet</h4><p class="empty-copy">This project does not have any tracked plans.</p></div>',
+                  ),
+                ),
+              )
+            }
+          } catch (error) {
+            console.error("Project stream error:", error)
+            cleanup()
+          } finally {
+            polling = false
+          }
+        }
+
+        send(sseComment())
+        pollTimer = setInterval(() => {
+          void poll()
+        }, STREAM_POLL_MS)
+        keepAliveTimer = setInterval(() => send(sseComment()), STREAM_KEEPALIVE_MS)
+        request.signal.addEventListener("abort", cleanup)
+      },
+      cancel() {
+        cleanup()
+      },
+    }),
+    { headers },
+  )
 }
 
 function renderDetail(detail: ProjectDetails): string {
@@ -1305,31 +1537,27 @@ function renderDetail(detail: ProjectDetails): string {
           <h3 class="section-title">Plans</h3>
           <div class="meta">${pluralize(plans.length, "plan")}${hiddenDetails.length ? ` (${hiddenDetails.join(", ")})` : ""}</div>
         </div>
-        <div class="plan-list">${plansHtml}</div>
+        <div class="plan-list" id="plan-list">${plansHtml || '<div class="empty" id="plan-list-empty"><h4 class="empty-title">No plans yet</h4><p class="empty-copy">This project does not have any tracked plans.</p></div>'}</div>
       </section>
     `
     : `
-      <section class="panel">
-        <div class="empty"><h4 class="empty-title">No plans yet</h4><p class="empty-copy">This project does not have any tracked plans.</p></div>
+      <section>
+        <div class="section-header">
+          <h3 class="section-title">Plans</h3>
+          <div class="meta">0 plans</div>
+        </div>
+        <div class="plan-list" id="plan-list"><div class="empty" id="plan-list-empty"><h4 class="empty-title">No plans yet</h4><p class="empty-copy">This project does not have any tracked plans.</p></div></div>
       </section>
     `
 
-  const activitySection = `
-    <section class="panel">
-      <div class="section-header">
-        <h3 class="section-title">Recent Activity</h3>
-        <div class="meta">Last ${Math.min(activity.length, 20)} entries</div>
-      </div>
-      ${activity.length ? `<div class="timeline">${activity.map(renderActivityItem).join("")}</div>` : '<div class="empty"><h4 class="empty-title">No recent activity</h4><p class="empty-copy">Task updates and notes will appear here.</p></div>'}
-    </section>
-  `
+  const activitySection = renderActivitySection(activity)
 
   return renderShell(
     `${project.name} · Agentbook Dashboard`,
-    `Viewing ${project.name}. Auto-refreshing every 10 seconds.`,
+    `Viewing ${project.name}. Live updates enabled.`,
     projectHref(project.id),
-    `${header}<div class="stack">${plansSection}${activitySection}</div>`,
-    "frames",
+    `${header}<div class="stack">${plansSection}${activitySection}</div><turbo-stream-source src="/streams/projects/${escapeHtml(encodeURIComponent(project.id))}"></turbo-stream-source>`,
+    "none",
   )
 }
 
@@ -1384,6 +1612,12 @@ export function startServer(port: number) {
           }
 
           return htmlResponse(renderPlanFrameResponse(projectId, planId))
+        }
+
+        const streamMatch = url.pathname.match(/^\/streams\/projects\/([^/]+)$/)
+        if (request.method === "GET" && streamMatch) {
+          const projectId = decodePathSegment(streamMatch[1], "Project id")
+          return renderProjectStreamResponse(projectId, request)
         }
 
         const projectMatch = url.pathname.match(/^\/projects\/([^/]+)$/)

@@ -110,6 +110,16 @@ function flag(args: string[], name: string): string | undefined {
   return args[i + 1]
 }
 
+function assertNoUnknownFlags(args: string[], allowedFlags: string[], command: string) {
+  const allowed = new Set(allowedFlags)
+  for (let i = 0; i < args.length; i++) {
+    const token = args[i]
+    if (!token.startsWith("--")) continue
+    if (!allowed.has(token)) die(`unknown flag for ${command}: ${token}`)
+    i += 1
+  }
+}
+
 function positional(args: string[]): string | undefined {
   for (let i = 0; i < args.length; i++) {
     if (args[i].startsWith("--")) {
@@ -241,11 +251,19 @@ function planUpdate(db: Database, args: string[]) {
   const existing = resolvePlan(db, ref)
   if (!existing) die(`plan not found: ${ref}`)
   const id = (existing as { id: string }).id
+  if (flag(args, "--title") === "") die("--title cannot be empty")
   const name = flag(args, "--name") ?? (existing as { name: string }).name
-  const title = flag(args, "--title") || existing.title
+  const title = flag(args, "--title") ?? existing.title
   const description = flag(args, "--description") ?? existing.description
   const document = flag(args, "--document") ?? (existing as any).document
   const status = flag(args, "--status") || existing.status
+  assertNoUnknownFlags(args, ["--name", "--title", "--description", "--document", "--status"], "plan update")
+  const changedFields = [
+    name !== (existing as { name: string }).name ? "name" : null,
+    title !== existing.title ? "title" : null,
+    description !== existing.description ? "description" : null,
+    document !== (existing as { document?: string | null }).document ? "document" : null,
+  ].filter((field): field is string => field !== null)
   const ts = now()
   db.run(`UPDATE plan SET name = ?, title = ?, description = ?, document = ?, status = ?, updated_at = ? WHERE id = ?`, [
     name,
@@ -258,6 +276,9 @@ function planUpdate(db: Database, args: string[]) {
   ])
   if (status !== existing.status) {
     logActivity(db, id, "", "status_changed", "", `Plan status: ${existing.status} -> ${status}`)
+  }
+  if (changedFields.length > 0) {
+    logActivity(db, id, "", "plan_updated", "", `Plan "${existing.title}" updated fields: ${changedFields.join(", ")}`)
   }
   json({ id, name, title, description, document, status, updated_at: ts })
 }
@@ -315,17 +336,51 @@ function taskGet(db: Database, args: string[]) {
 function taskUpdate(db: Database, args: string[]) {
   const id = positional(args)
   if (!id) die("task id is required")
-  const existing = db.query(`SELECT * FROM task WHERE id = ?`).get(id)
+  const existing = db.query(`SELECT * FROM task WHERE id = ?`).get(id) as {
+    id: string
+    plan_id: string
+    title: string
+    description: string
+    status: string
+    priority: number
+    position: number
+    assignee: string
+    worktree_dir: string
+    session_id: string
+    depends_on: string
+    notes: string
+    created_at: number
+    updated_at: number
+  } | null
   if (!existing) die(`task not found: ${id}`)
+  const title = flag(args, "--title") ?? existing.title
+  const description = flag(args, "--description") ?? existing.description
   const status = flag(args, "--status") || existing.status
+  const priority = parseInt(flag(args, "--priority") || String(existing.priority), 10)
+  const dependsOn = flag(args, "--depends-on") ?? existing.depends_on
   const assignee = flag(args, "--assignee") ?? existing.assignee
   const notes = flag(args, "--notes") ?? existing.notes
   const session = flag(args, "--session") ?? existing.session_id
   const worktree = flag(args, "--worktree") ?? existing.worktree_dir
+  assertNoUnknownFlags(
+    args,
+    ["--title", "--description", "--status", "--priority", "--depends-on", "--assignee", "--notes", "--session", "--worktree"],
+    "task update",
+  )
+  const changedFields = [
+    title !== existing.title ? "title" : null,
+    description !== existing.description ? "description" : null,
+    priority !== existing.priority ? "priority" : null,
+    dependsOn !== existing.depends_on ? "depends_on" : null,
+    assignee !== existing.assignee ? "assignee" : null,
+    notes !== existing.notes ? "notes" : null,
+    session !== existing.session_id ? "session_id" : null,
+    worktree !== existing.worktree_dir ? "worktree_dir" : null,
+  ].filter((field): field is string => field !== null)
   const ts = now()
   db.run(
-    `UPDATE task SET status = ?, assignee = ?, notes = ?, session_id = ?, worktree_dir = ?, updated_at = ? WHERE id = ?`,
-    [status, assignee, notes, session, worktree, ts, id],
+    `UPDATE task SET title = ?, description = ?, status = ?, priority = ?, assignee = ?, worktree_dir = ?, session_id = ?, depends_on = ?, notes = ?, updated_at = ? WHERE id = ?`,
+    [title, description, status, priority, assignee, worktree, session, dependsOn, notes, ts, id],
   )
   if (status !== existing.status) {
     logActivity(
@@ -337,7 +392,22 @@ function taskUpdate(db: Database, args: string[]) {
       `Task "${existing.title}": ${existing.status} -> ${status}`,
     )
   }
-  json({ ...existing, status, assignee, notes, session_id: session, worktree_dir: worktree, updated_at: ts })
+  if (changedFields.length > 0) {
+    logActivity(db, existing.plan_id, id, "task_updated", assignee, `Task "${title}" updated fields: ${changedFields.join(", ")}`)
+  }
+  json({
+    ...existing,
+    title,
+    description,
+    status,
+    priority,
+    assignee,
+    notes,
+    session_id: session,
+    worktree_dir: worktree,
+    depends_on: dependsOn,
+    updated_at: ts,
+  })
 }
 
 function activityCreate(db: Database, args: string[]) {
@@ -422,7 +492,7 @@ Commands:
   task create   --plan <plan-id|plan-name> --title <t> [--description <d>] [--priority <n>] [--depends-on <ids>]
   task list     [--plan <plan-id|plan-name>] [--status <s>]
   task get      <task-id>
-  task update   <task-id> [--status <s>] [--assignee <a>] [--notes <n>] [--session <sid>] [--worktree <dir>]
+  task update   <task-id> [--status <s>] [--assignee <a>] [--notes <n>] [--session <sid>] [--worktree <dir>] [--title <t>] [--description <d>] [--priority <n>] [--depends-on <ids>]
 
   log create    --plan <plan-id|plan-name> [--task <task-id>] [--action <a>] [--detail <d>] [--agent <name>]
   log list      --plan <plan-id|plan-name> [--limit <n>]

@@ -1084,6 +1084,49 @@ function renderShell(
     ${content}
   </main>
   ${renderAutoRefreshScript(refreshMode)}
+  <script>
+    (function () {
+      function flashCopied(button) {
+        if (!button || !button.classList) return;
+        button.classList.add('copied');
+        setTimeout(function () { button.classList.remove('copied'); }, 1500);
+      }
+
+      function fallbackCopy(text, button) {
+        try {
+          var ta = document.createElement('textarea');
+          ta.value = text;
+          ta.setAttribute('readonly', '');
+          ta.style.position = 'fixed';
+          ta.style.top = '0';
+          ta.style.left = '0';
+          ta.style.opacity = '0';
+          document.body.appendChild(ta);
+          ta.focus();
+          ta.select();
+          var ok = document.execCommand('copy');
+          document.body.removeChild(ta);
+          if (ok) { flashCopied(button); return true; }
+        } catch (err) {
+          console.warn('Clipboard fallback failed:', err);
+        }
+        return false;
+      }
+
+      window.copyToClipboard = function (text, button) {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(function () {
+            flashCopied(button);
+          }).catch(function (err) {
+            console.warn('Clipboard API failed, falling back:', err);
+            fallbackCopy(text, button);
+          });
+        } else {
+          fallbackCopy(text, button);
+        }
+      };
+    })();
+  </script>
 </body>
 </html>`
 }
@@ -1229,7 +1272,7 @@ function renderPlanSummary(plan: PlanDetails): string {
           class="copy-plan-button"
           title="Copy UUID + name"
           aria-label="Copy UUID and name for ${escapeHtml(plan.title || plan.name || "plan")}"
-          onclick="event.preventDefault(); event.stopPropagation(); const button = this; const label = button.querySelector('.copy-plan-button-text'); const original = label?.textContent || '📋'; navigator.clipboard.writeText(${escapeHtml(copyText)}).then(() => { if (label) label.textContent = 'Copied!'; button.classList.add('copied'); clearTimeout(button.__copyResetTimer); button.__copyResetTimer = setTimeout(() => { if (label) label.textContent = original; button.classList.remove('copied'); }, 1500); });"
+          onclick="event.preventDefault(); event.stopPropagation(); window.copyToClipboard(${escapeHtml(copyText)}, this)"
         ><span class="copy-plan-button-text">📋</span></button>
       </div>
       <div class="plan-summary-meta">

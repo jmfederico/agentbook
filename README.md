@@ -43,7 +43,7 @@ ln -s ~/agentbook/agents/coordinator.md ~/.config/opencode/agents/coordinator.md
 ln -s ~/agentbook/agents/worker.md ~/.config/opencode/agents/worker.md
 ```
 
-The `worker` agent is a subagent dispatched by `coordinator` via the Task tool and is hidden from the `@` autocomplete menu. Users should interact with `coordinator` instead.
+The `worker` agent is a subagent dispatched by `coordinator` via the Task tool and is visible in the `@` autocomplete menu so users can see it exists, but `coordinator` remains the recommended entry point for doing work.
 
 ## opencode configuration
 

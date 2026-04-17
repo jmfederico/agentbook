@@ -38,6 +38,8 @@ ln -s ~/agentbook/agents/coordinator.md ~/.config/opencode/agents/coordinator.md
 ln -s ~/agentbook/agents/worker.md ~/.config/opencode/agents/worker.md
 ```
 
+The worker agent is installed as a subagent-only agent; users do not mention it directly. The coordinator dispatches it as needed.
+
 ### 3. Make coordinator the default agent (recommended)
 
 Strongly recommend setting `"default_agent": "coordinator"` in `~/.config/opencode/opencode.json` or a project-local `opencode.json` so new sessions start in the right place immediately.
@@ -54,6 +56,8 @@ See [opencode default_agent docs](https://opencode.ai/docs/config/#default-agent
 ### 4. Configure models (optional)
 
 Override agent models per-project in `opencode.json`:
+
+The `worker` entry controls the model used by the worker subagent that the coordinator dispatches.
 
 ```jsonc
 {
@@ -95,7 +99,7 @@ To avoid permission prompts for agentbook commands, add to your config:
 ### Execute a plan
 
 ```
-@worker Resume plan <plan-name>
+@coordinator Resume plan <plan-name>
 ```
 
 ### Check progress from any session or worktree

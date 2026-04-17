@@ -1,6 +1,6 @@
 ---
 description: "Executes tasks from tracked plans. Picks up pending work, implements it, and reports progress back to the plan database."
-mode: all
+mode: subagent
 permission:
   bash:
     "agentbook *": allow

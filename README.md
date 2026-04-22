@@ -24,18 +24,20 @@ Cross-session plan tracking for AI agents, backed by SQLite.
 
 ## Installation
 
-Clone this repository somewhere permanent:
+Clone this repository somewhere permanent, then capture the absolute path to that checkout:
 
 ```bash
-git clone https://github.com/jmfederico/agentbook.git ~/agentbook
+git clone https://github.com/jmfederico/agentbook.git /path/to/agentbook
+REPO_PATH="/path/to/agentbook"
 ```
 
-Register the skill path in your global opencode config:
+Register the skill path in your global opencode config, using the same checkout path you stored in `REPO_PATH`:
 
 ```jsonc
 {
   "skills": {
-    "paths": ["~/agentbook/skills"]
+    // replace with the absolute path from REPO_PATH + "/skills"
+    "paths": ["/path/to/agentbook/skills"]
   }
 }
 ```
@@ -44,9 +46,19 @@ Install the bundled agents:
 
 ```bash
 mkdir -p ~/.config/opencode/agents
-ln -s ~/agentbook/agents/coordinator.md ~/.config/opencode/agents/coordinator.md
-ln -s ~/agentbook/agents/worker.md ~/.config/opencode/agents/worker.md
+ln -s "$REPO_PATH/agents/coordinator.md" ~/.config/opencode/agents/coordinator.md
+ln -s "$REPO_PATH/agents/worker.md" ~/.config/opencode/agents/worker.md
 ```
+
+Expose the CLI globally from that same checkout:
+
+If you just installed Bun, restart your shell or source your shell rc file first so `bun` is on `PATH` before you run `bun link`.
+
+```bash
+bun link "$REPO_PATH"
+```
+
+`bun link` is the supported way to install `agentbook` globally from your checkout. If that command fails, stop there and fix your Bun installation, `PATH`, and shell setup before continuing. Do not continue with a manual symlink or alternate global install workaround.
 
 The `worker` agent is a subagent dispatched by `coordinator` via the Task tool and is visible in the `@` autocomplete menu so users can see it exists, but `coordinator` remains the recommended entry point for doing work.
 

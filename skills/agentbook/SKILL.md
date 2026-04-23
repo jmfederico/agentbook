@@ -7,6 +7,14 @@ description: "Cross-session plan tracking system using SQLite for AI agents. Loa
 
 A CLI-based system for tracking plans and tasks across AI sessions and git worktrees.
 
+## Scope of This Skill
+
+This skill documents the **tracked plan/task workflow** built around the `agentbook` database.
+
+- Use it when creating, updating, resuming, or executing tracked plan work.
+- It does **not** mean every helper-agent run in this repository requires a plan or task.
+- Direct helper-agent override runs may exist outside this tracked workflow unless the user explicitly asks for tracked work.
+
 ## Database Location
 
 When run inside a git repository, the CLI automatically resolves the database to a shared location inside the git common directory (`<git-common-dir>/agentbook/agentbook.db`). This means all worktrees share the same database with no configuration needed.
@@ -128,9 +136,13 @@ The coordinator follows a 5-phase flow:
 2. **Understand**: explore the codebase to understand scope and constraints.
 3. **Draft spec + approval gate**: write a spec covering goals, scope, non-goals, and acceptance criteria. Update the plan: `plan update <id> --spec "..." --status needs_spec_approval`. Present the spec to the user and wait for approval. Do not create tasks or dispatch workers yet. Revise and re-propose if the user requests changes.
 4. **On approval — activate**: once the user approves, write the architecture document, break work into tasks (`task create --plan <id> --title "..." --priority <n>`), set dependencies where needed, and mark the plan active: `plan update <id> --document "..." --status active`.
-5. **Execute on request**: dispatch workers one task at a time as requested. Check progress with `summary` or `task list`.
+5. **Execute on request**: keep plan ownership with the coordinator, dispatch workers for specific tasks, and check progress with `summary` or `task list`.
 
 ### Dispatching Workers (Coordinator)
+
+The coordinator owns plan execution. Workers are task executors, not plan managers.
+
+This section applies to **tracked worker dispatch**. If a human explicitly invokes a helper agent in direct override mode, the coordinator may dispatch that helper without requiring plan/task state and may pass plan/task references only as optional context.
 
 Dispatch prompts are **pointer-only**. Include only:
 - Plan name/id
@@ -155,6 +167,8 @@ Never restate task titles, descriptions, or plan context in the prompt. The work
 6. Mark complete: `task update <id> --status completed --notes "summary of what was done"`
 7. Return control. Do not continue onto another plan task in the same worker session unless explicitly re-dispatched.
 
+Workers should not independently resume a plan, choose the next task, or take over coordinator responsibilities unless a future approved spec explicitly says otherwise.
+
 ### Handling Scope Changes (Coordinator)
 
 If the user changes goals or scope mid-flight:
@@ -162,12 +176,12 @@ If the user changes goals or scope mid-flight:
 2. Update the plan: `plan update <id> --spec "..." --status needs_spec_approval`.
 3. Present the revised spec to the user and wait for re-approval. Do not dispatch new workers until approved.
 
-### Resuming from Another Session or Worktree
+### Resuming from Another Session or Worktree (Coordinator)
 
 1. List active plans: `plan list --status active`
 2. Read plan context: `plan get <plan-name-or-id>` — confirm spec and document still match reality before continuing work.
 3. Find pending or in-progress tasks: `task list --plan <id>`
-4. Continue from where the previous session left off.
+4. Continue from where the previous session left off by dispatching the next appropriate worker task.
 
 ### Checking Progress
 

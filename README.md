@@ -2,7 +2,7 @@
 
 Cross-session plan tracking for AI agents, backed by SQLite.
 
-`agentbook` helps coordinator and worker agents track multi-step work across sessions and git worktrees with a shared SQLite database.
+`agentbook` helps a human delegate multi-step work to AI agents with minimal ongoing supervision once requirements are clear. It gives coordinator and worker agents a shared SQLite-backed plan ledger that persists across sessions and git worktrees.
 
 ## Features
 
@@ -16,7 +16,8 @@ Cross-session plan tracking for AI agents, backed by SQLite.
 
 - Select `coordinator` as your active agent (set it as your default or switch to it in opencode) — it plans and keeps track of your work across sessions and worktrees. Do not just `@coordinator` from another agent; actually talk to `coordinator` as your active agent.
 - The coordinator drafts a `spec` (the "what") and asks you to approve it before breaking work into tasks. Once you approve, it creates tasks and dispatches workers.
-- Only `@`-mention other agents like `@worker` when you want a specific task done and want to bypass plan creation — and even then, keep `coordinator` as your active agent so it can dispatch the work.
+- Your normal human role is to provide goals, approve or revise specs when scope changes, and review results — not to manually babysit every implementation step.
+- Keep `coordinator` as your active agent for normal use. Direct `@worker` or `@explore` mentions are supported as an explicit helper-agent override path, but they are still exceptional/manual usage rather than the default workflow.
 
 ## Requirements
 
@@ -51,6 +52,14 @@ ln -s "$REPO_PATH/agents/coordinator.md" ~/.config/opencode/agents/coordinator.m
 ln -s "$REPO_PATH/agents/worker.md" ~/.config/opencode/agents/worker.md
 ```
 
+Optional helper agent:
+
+```bash
+ln -s "$REPO_PATH/agents/explore.md" ~/.config/opencode/agents/explore.md
+```
+
+`explore` is a vendored, read-only investigation helper for coordinator-led research. It is optional; the primary workflow remains `coordinator` + `worker`.
+
 Expose the CLI globally from that same checkout:
 
 If you just installed Bun, restart your shell or source your shell rc file first so `bun` is on `PATH` before you run `bun link`.
@@ -61,7 +70,7 @@ bun link "$REPO_PATH"
 
 `bun link` is the supported way to install `agentbook` globally from your checkout. If that command fails, stop there and fix your Bun installation, `PATH`, and shell setup before continuing. Do not continue with a manual symlink or alternate global install workaround.
 
-The `worker` agent is a subagent dispatched by `coordinator` via the Task tool and is visible in the `@` autocomplete menu so users can see it exists, but `coordinator` remains the recommended entry point for doing work.
+The `worker` agent is normally dispatched by `coordinator` for tracked task work and is visible in the `@` autocomplete menu so users can see it exists. Direct `@worker` mentions are also supported as an explicit override path, but `coordinator` remains the recommended entry point for normal work.
 
 ## opencode configuration
 
@@ -109,18 +118,43 @@ This avoids repeated prompts for `agentbook` commands while keeping out-of-works
 
 ## Quick start
 
+Recommended default flow for tracked work:
+
+1. Talk to `coordinator` as your active agent.
+2. Describe the outcome you want.
+3. Review and approve the drafted `spec`.
+4. Let the coordinator dispatch workers for bounded tasks.
+5. Come back later and ask the coordinator to resume the plan or report progress.
+
 Ask the coordinator to create a plan:
 
 ```text
-@coordinator Add OAuth2 authentication to the API
+Add OAuth2 authentication to the API
 ```
 
 The coordinator will draft a `spec` (requirements) and ask for your approval before breaking work into tasks. Once you approve, it dispatches workers automatically.
 
+### Tracked work vs direct helper-agent override
+
+This repository supports two intentional operating modes:
+
+1. **Tracked coordinator-led work (default)**
+   - Use `coordinator` as your active agent.
+   - The coordinator owns plans, specs, approval gates, task creation, dependency checks, and dispatch.
+   - Workers execute bounded tracked tasks and update task state in `agentbook`.
+
+2. **Direct helper-agent override work (manual/exception path)**
+   - If you explicitly mention a helper agent such as `@worker` or `@explore`, that mention acts as a request to run that helper directly.
+   - In this mode, the helper run does **not** require a plan or task unless you explicitly ask for tracked work.
+   - The coordinator still owns tracked plans and orchestration; a direct helper run does not silently claim, update, or execute tracked plan work on its own.
+   - A coordinator may still pass a plan or task reference as **optional context** to the helper in override mode, but that context is informative unless you explicitly want the helper to operate in tracked mode.
+
+Use tracked mode for durable multi-step work. Use direct helper override when you intentionally want a one-off bounded assist without creating or advancing tracked plan state.
+
 Resume tracked work later:
 
 ```text
-@coordinator Resume plan oauth2-auth
+Resume plan oauth2-auth
 ```
 
 Or use the CLI directly:
@@ -130,6 +164,35 @@ agentbook init
 agentbook plan list --status active
 agentbook summary oauth2-auth
 ```
+
+## Agent and skill evaluation framework
+
+This repository defaults to a **coordinator-owned planning model** for tracked work:
+
+- `coordinator` owns plans, specs, approval gates, task creation, dependency checks, and dispatch sequencing.
+- `worker` is a general-purpose executor that completes one assigned task, verifies the result, updates task status, and stops.
+- `explore` is an optional vendored helper for read-only codebase investigation when a parent agent wants a tighter research boundary.
+- `skills` hold reusable procedures and operational knowledge that multiple agents can load.
+
+Direct helper-agent override runs are also supported when a human explicitly mentions a helper agent. That override path is intentionally separate from tracked plan execution: it bypasses plan/task requirements unless the user explicitly requests tracked work, and it does not change coordinator ownership of plans.
+
+Use this rule of thumb when deciding where behavior belongs:
+
+- Create or keep an **agent** when model choice, autonomy boundaries, permissions, or durable role separation matter.
+- Create or keep a **skill** when the behavior is reusable workflow knowledge that should not change ownership boundaries.
+- Keep **human-facing repo docs** for project policy and operating guidance, and align them with the actual agent and skill definitions.
+
+Specific responsibilities are evaluated as follows:
+
+- **Planning** belongs to `coordinator` rather than a worker or shared skill.
+- **Codebase exploration** should usually be a skill-backed activity inside an existing role, not a separate long-lived agent by default.
+- **Execution** belongs to `worker`, with specialized implementation guidance loaded through skills as needed.
+
+When useful opencode agent definitions exist elsewhere, this repo has a default bias toward **vendoring them locally** so their behavior can be reviewed, adapted, and maintained alongside the rest of the workflow.
+
+For the current vendoring decisions, see [`docs/opencode-agent-inventory.md`](docs/opencode-agent-inventory.md).
+
+For the full repository decision framework, see [`docs/agent-skill-evaluation-framework.md`](docs/agent-skill-evaluation-framework.md).
 
 ## CLI reference
 
@@ -224,8 +287,12 @@ That location is shared automatically across all git worktrees for the same repo
 ```text
 .
 ├── agents/
+│   ├── explore.md
 │   ├── coordinator.md
 │   └── worker.md
+├── docs/
+│   ├── agent-skill-evaluation-framework.md
+│   └── opencode-agent-inventory.md
 ├── skills/
 │   └── agentbook/
 │       └── SKILL.md
@@ -237,6 +304,9 @@ That location is shared automatically across all git worktrees for the same repo
 
 - `agents/coordinator.md` describes the planning and delegation role.
 - `agents/worker.md` describes the task execution role.
+- `agents/explore.md` defines the optional read-only exploration helper.
+- `docs/agent-skill-evaluation-framework.md` records how this repo decides whether behavior belongs in an agent, a skill, or shared documentation.
+- `docs/opencode-agent-inventory.md` records which upstream/opencode agents were evaluated and why only selected definitions were vendored locally.
 - `skills/agentbook/SKILL.md` contains the detailed CLI and workflow reference.
 - `src/cli.ts` implements the CLI entrypoint.
 

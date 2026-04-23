@@ -50,18 +50,23 @@ Install the bundled agents:
 mkdir -p ~/.config/opencode/agents
 ln -s "$REPO_PATH/agents/coordinator.md" ~/.config/opencode/agents/coordinator.md
 ln -s "$REPO_PATH/agents/worker.md" ~/.config/opencode/agents/worker.md
-```
-
-Optional helper agents:
-
-```bash
 ln -s "$REPO_PATH/agents/scout.md" ~/.config/opencode/agents/scout.md
 ln -s "$REPO_PATH/agents/deep-review.md" ~/.config/opencode/agents/deep-review.md
 ```
 
-`scout` is a vendored, read-only investigation helper for coordinator-led research. It is optional; the primary workflow remains `coordinator` + `worker`.
+Also add the bundled tmp-folder instruction to your global opencode config so agents consistently use `/tmp/opencode/` for scratch files:
 
-`deep-review` is an optional read-only review helper for slower, higher-scrutiny code review passes. Use it when you want a stronger critique boundary than the default exploration helper.
+```jsonc
+{
+  "instructions": [
+    "/path/to/agentbook/instructions/tmp-folder.md"
+  ]
+}
+```
+
+`scout` is a vendored, read-only investigation helper for coordinator-led research.
+
+`deep-review` is a read-only review helper for slower, higher-scrutiny code review passes. Use it when you want a stronger critique boundary than the default exploration helper.
 
 This rename avoids shadowing opencode's built-in `explore` agent. Use `scout` for the local vendored helper; the upstream `explore` agent remains a separate concept.
 
@@ -99,6 +104,9 @@ Optional per-agent model overrides (choose whatever models fit your local setup)
     "worker": {
       "model": "<your preferred worker model>"
     },
+    "scout": {
+      "model": "<your preferred scout model>"
+    },
     "deep-review": {
       "model": "<your preferred deep-review model>"
     }
@@ -108,7 +116,7 @@ Optional per-agent model overrides (choose whatever models fit your local setup)
 
 This repository leaves model choice to you; use the settings above as a local configuration template rather than a recommendation.
 
-Recommended permissions:
+Recommended permissions after adding `instructions/tmp-folder.md` to `instructions`:
 
 ```jsonc
 {
@@ -124,7 +132,7 @@ Recommended permissions:
 }
 ```
 
-This avoids repeated prompts for `agentbook` commands while keeping out-of-workspace access recoverable for subagents.
+This avoids repeated prompts for `agentbook` commands while keeping out-of-workspace access recoverable for subagents. The `/tmp/opencode/*` allowance assumes you added the tmp-folder instruction above to `instructions`, which tells agents to use that path for temporary files.
 
 ## Quick start
 
@@ -181,8 +189,8 @@ This repository defaults to a **coordinator-owned planning model** for tracked w
 
 - `coordinator` owns plans, specs, approval gates, task creation, dependency checks, and dispatch sequencing.
 - `worker` is a general-purpose executor that completes one assigned task, verifies the result, updates task status, and stops.
-- `scout` is an optional vendored helper for read-only codebase investigation when a parent agent wants a tighter research boundary.
-- `deep-review` is an optional read-only helper for thorough review passes and higher-confidence critique.
+- `scout` is a vendored helper for read-only codebase investigation when a parent agent wants a tighter research boundary.
+- `deep-review` is a read-only helper for thorough review passes and higher-confidence critique.
 - `skills` hold reusable procedures and operational knowledge that multiple agents can load.
 
 Direct helper-agent override runs are also supported when a human explicitly mentions a helper agent. That override path is intentionally separate from tracked plan execution: it bypasses plan/task requirements unless the user explicitly requests tracked work, and it does not change coordinator ownership of plans.
@@ -315,7 +323,7 @@ That location is shared automatically across all git worktrees for the same repo
 
 - `agents/coordinator.md` describes the planning and delegation role.
 - `agents/worker.md` describes the task execution role.
-- `agents/scout.md` defines the optional read-only exploration helper.
+- `agents/scout.md` defines the read-only exploration helper.
 - `docs/agent-skill-evaluation-framework.md` records how this repo decides whether behavior belongs in an agent, a skill, or shared documentation.
 - `docs/opencode-agent-inventory.md` records which upstream/opencode agents were evaluated and why only selected definitions were vendored locally.
 - `skills/agentbook/SKILL.md` contains the detailed CLI and workflow reference.

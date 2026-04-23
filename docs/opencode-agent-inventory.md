@@ -25,6 +25,17 @@ This document evaluates the built-in OpenCode agents against this repository's [
   - make clear that direct `@scout` invocation does not require a plan/task unless the user explicitly wants tracked work
   - prefer repository search and read tools over any change-capable workflow
 
+### `deep-review` (repo-defined review helper)
+
+- **Role:** slow, read-only review pass for code quality, correctness, and architecture critique.
+- **Status in this repo:** **optional helper**. It complements `scout` by favoring higher-scrutiny review over quick investigation.
+- **Why it exists:** this repository wants a distinct helper for thorough code review without expanding the default worker role or mixing review into planning.
+- **Boundary:** it should remain read-only and advisory; it must not claim tasks, mutate state, or behave like an implementer.
+- **Expected adaptations from repository workflow:**
+  - use it when the reviewer needs a stricter scrutiny boundary than `scout`
+  - keep the agent definition and README config in sync so users can install and override it consistently
+  - preserve the repo's coordinator-owned planning model by keeping review output advisory only
+
 ## Rejected candidates
 
 ### `build`

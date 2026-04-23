@@ -11,5 +11,8 @@
     "skills",
     "agents"
   ],
+  "scripts": {
+    "test": "bun test"
+  },
   "license": "MIT"
 }

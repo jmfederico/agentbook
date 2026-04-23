@@ -15,6 +15,7 @@ Cross-session plan tracking for AI agents, backed by SQLite.
 ## TL;DR — how to use the agents
 
 - Select `coordinator` as your active agent (set it as your default or switch to it in opencode) — it plans and keeps track of your work across sessions and worktrees. Do not just `@coordinator` from another agent; actually talk to `coordinator` as your active agent.
+- The coordinator drafts a `spec` (the "what") and asks you to approve it before breaking work into tasks. Once you approve, it creates tasks and dispatches workers.
 - Only `@`-mention other agents like `@worker` when you want a specific task done and want to bypass plan creation — and even then, keep `coordinator` as your active agent so it can dispatch the work.
 
 ## Requirements
@@ -114,6 +115,8 @@ Ask the coordinator to create a plan:
 @coordinator Add OAuth2 authentication to the API
 ```
 
+The coordinator will draft a `spec` (requirements) and ask for your approval before breaking work into tasks. Once you approve, it dispatches workers automatically.
+
 Resume tracked work later:
 
 ```text
@@ -139,13 +142,15 @@ agentbook <command> <subcommand> [options]
 ### Plans
 
 ```bash
-agentbook plan create --title "Feature: OAuth2" --name "oauth2-auth" --description "Add OAuth2 authentication to the API" --document "Initial plan notes"
+agentbook plan create --title "Feature: OAuth2" --name "oauth2-auth" --description "Add OAuth2 authentication to the API" --spec "User requirements here" --document "Initial plan notes"
 agentbook plan list
 agentbook plan list --status active
+agentbook plan list --status needs_spec_approval
 agentbook plan get oauth2-auth
 agentbook plan archive oauth2-auth
 agentbook plan archive --older-than 7d
 agentbook plan update oauth2-auth --status active
+agentbook plan update oauth2-auth --spec "Revised requirements"
 ```
 
 ### Tasks
@@ -171,11 +176,15 @@ For the full agent workflow and command details, see [`skills/agentbook/SKILL.md
 
 ## Data model
 
-Plans include an `id`, user-facing `name`, `title`, `description`, `status`, and a free-form `document` used for handoff context.
+Plans include an `id`, user-facing `name`, `title`, `description`, `status`, a `spec` field, and a `document` field.
+
+- `spec` is the user-owned requirements ("what"). The coordinator drafts it and proposes revisions; the user approves each revision. Each change flips the plan to `needs_spec_approval` until the user re-approves.
+- `document` is the coordinator-owned architecture and notes ("how"). It is a living artifact updated throughout execution.
 
 Plan statuses:
 
 - `draft`
+- `needs_spec_approval` — coordinator has drafted or revised the spec; waiting for user approval. No new workers are dispatched in this state.
 - `active`
 - `paused`
 - `completed`
@@ -193,7 +202,7 @@ Task statuses:
 - `needs_review`
 - `cancelled`
 
-Dependencies are stored via `--depends-on` as a comma-separated list of task IDs. The plan `document` is the durable context artifact agents read and update as work evolves.
+Dependencies are stored via `--depends-on` as a comma-separated list of task IDs. `plan get` returns the plan body only (including `spec` and `document`); use `task list` or `summary` to view tasks.
 
 ## Database location and worktree behavior
 

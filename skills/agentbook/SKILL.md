@@ -28,14 +28,16 @@ All commands output JSON.
 ### Plan Commands
 
 ```bash
-agentbook plan create --title "Feature: OAuth2" --name "oauth2-auth" --description "Add OAuth2 authentication to the API" [--document <doc>]
+agentbook plan create --title "Feature: OAuth2" --name "oauth2-auth" --description "Add OAuth2 authentication to the API" [--spec <spec>] [--document <doc>]
 agentbook plan list
 agentbook plan list --status active
 agentbook plan get <plan-id-or-name>
 agentbook plan archive <plan-id-or-name>
 agentbook plan archive --older-than 7d
-agentbook plan update <plan-id-or-name> --status active [--document <doc>]
+agentbook plan update <plan-id-or-name> --status active [--spec <spec>] [--document <doc>]
 ```
+
+`plan get` returns the plan body only (id, name, title, description, spec, document, status, timestamps). It does **not** include a tasks array. Use `summary`, `task list`, or `task get` for task views.
 
 ### Task Commands
 
@@ -62,11 +64,21 @@ Plan JSON includes both a stable UUID `id` and a user-facing `name`. Prefer show
 ### Plan Statuses
 
 - `draft`
+- `needs_spec_approval` — coordinator has drafted (or revised) the spec and is waiting for user approval
 - `active`
 - `paused`
 - `completed`
 - `cancelled`
 - `archived`
+
+**Lifecycle transitions:**
+
+- `draft` → `needs_spec_approval`: coordinator drafts the spec and proposes it for approval.
+- `needs_spec_approval` → `needs_spec_approval`: coordinator revises spec based on user feedback.
+- `needs_spec_approval` → `active`: user approves the spec; coordinator creates tasks and sets the plan active.
+- `active` → `needs_spec_approval`: a scope change mid-flight requires a revised spec before work continues.
+- `active` → `paused` / `completed`: normal progress transitions.
+- any → `cancelled` / `archived`: terminal states.
 
 ### Task Statuses
 
@@ -81,57 +93,82 @@ Plan JSON includes both a stable UUID `id` and a user-facing `name`. Prefer show
 
 Tasks can declare dependencies via `--depends-on` (comma-separated task IDs). Before starting a task, check that all its dependencies are `completed`.
 
+## Plan Spec
+
+The `spec` field stores user-owned requirements for the plan — the stable "what". It is drafted by the coordinator and approved by the user. Every revision that changes goals or scope should flip the plan status to `needs_spec_approval` until the user re-approves.
+
+**Ownership:** the user approves; the coordinator drafts and proposes revisions. Once approved, the spec is a stable reference. Do not silently re-plan under an outdated spec — propose a revision and request re-approval.
+
+Suggested contents: goals and success criteria, scope (in and out), non-goals, acceptance criteria.
+
 ## Plan Document
 
-The `document` field stores a comprehensive markdown document for each plan. It is the primary knowledge artifact that enables agent handoff between coordinator and worker sessions.
+The `document` field stores coordinator-owned architecture and execution context — the living "how". It is updated throughout execution and does not require user approval.
 
-The plan document is a **living artifact** — it should be updated throughout execution, not just written once during planning.
+**Ownership:** coordinator only. Goals and acceptance criteria live in `spec`, not here.
 
-Suggested contents include goals and success criteria, context and background, architecture or design decisions, key files and patterns, constraints and risks, open questions, and current status notes.
+Suggested contents: architecture and design decisions, key files and patterns, constraints and risks, task breakdown rationale, open questions, current status notes.
 
 The document should be updated at these key moments:
-- After the task breakdown — finalize with task structure and sequencing rationale
+- After completing the task breakdown — record structure and sequencing rationale
 - After handling a worker checkpoint or review — record what changed and why
-- When the user changes scope or requirements — update goals and constraints
 - When resuming from a new session — verify the document still matches reality
 
-Coordinators should write or update this document after the design phase with `plan update <id> --document "..."`. Workers should read it from `plan get` output to understand the full context before executing tasks.
+Coordinators write or update this field with `plan update <id> --document "..."`. Workers read it from `plan get` output to understand architecture context.
 
-The document is free-form markdown, so its structure can vary based on the plan's complexity.
+Both fields are free-form markdown.
 
 ## Workflow Protocol
 
-### Creating a Plan
+### Creating a Plan (Coordinator)
 
-1. Create the plan entry: `plan create --title "..." --name "..." --description "..."`
-2. Explore the codebase to understand the scope
-3. Break work into tasks: `task create --plan <id> --title "..." --priority <n>`
-4. Set dependencies between tasks where needed
-5. Mark the plan as active: `plan update <id> --status active`
+The coordinator follows a 5-phase flow:
 
-### Executing Tasks
+1. **Register**: `plan create --title "..." --name "..." --description "..."`
+2. **Understand**: explore the codebase to understand scope and constraints.
+3. **Draft spec + approval gate**: write a spec covering goals, scope, non-goals, and acceptance criteria. Update the plan: `plan update <id> --spec "..." --status needs_spec_approval`. Present the spec to the user and wait for approval. Do not create tasks or dispatch workers yet. Revise and re-propose if the user requests changes.
+4. **On approval — activate**: once the user approves, write the architecture document, break work into tasks (`task create --plan <id> --title "..." --priority <n>`), set dependencies where needed, and mark the plan active: `plan update <id> --document "..." --status active`.
+5. **Execute on request**: dispatch workers one task at a time as requested. Check progress with `summary` or `task list`.
 
-1. Query for pending tasks: `task list --plan <name-or-id> --status pending`
-2. Check dependencies before starting
-3. Dispatch or claim exactly one task at a time per worker session. Parallelism should come from multiple workers, not from giving one worker multiple tasks.
+### Dispatching Workers (Coordinator)
+
+Dispatch prompts are **pointer-only**. Include only:
+- Plan name/id
+- Task id
+- Workspace root (only if not inferable from context)
+- Boilerplate: "Load the agentbook skill. Read the plan via `plan get`. Read your task via `task get`. Execute only this task. Stop and return control when done."
+
+Never restate task titles, descriptions, or plan context in the prompt. The worker reads those directly from the DB.
+
+**Freeze rule:** while plan status is `needs_spec_approval`, do not dispatch new workers. Let any in-flight tasks finish; start nothing new until the user re-approves the spec.
+
+### Executing Tasks (Worker)
+
+1. Read plan context: `plan get <plan-name-or-id>` — returns plan body (spec + document), no tasks array.
+2. Read task details: `task get <task-id>` — returns full task body including description and dependencies.
+3. Check dependencies: confirm all `depends_on` tasks are `completed` before starting.
 4. Claim the task: `task update <id> --status in_progress --assignee "worker" --session "<session>"`
-5. Do the implementation work
+5. Do the implementation work.
 
-    If the task is large or you encounter issues, set status to `needs_review` with notes summarizing progress and concerns, then stop. The coordinator will review and decide next steps.
+   If the task is large or you encounter issues, set status to `needs_review` with notes summarizing progress and concerns, then stop. The coordinator will review and decide next steps.
 
 6. Mark complete: `task update <id> --status completed --notes "summary of what was done"`
+7. Return control. Do not continue onto another plan task in the same worker session unless explicitly re-dispatched.
 
-    If the task revealed unexpected constraints or required design changes, the coordinator should update the plan document.
+### Handling Scope Changes (Coordinator)
 
-7. Return control after that task. Do not continue onto another plan task in the same worker session unless explicitly re-dispatched.
+If the user changes goals or scope mid-flight:
+1. Draft a revised spec reflecting the new requirements.
+2. Update the plan: `plan update <id> --spec "..." --status needs_spec_approval`.
+3. Present the revised spec to the user and wait for re-approval. Do not dispatch new workers until approved.
 
 ### Resuming from Another Session or Worktree
 
 1. List active plans: `plan list --status active`
-2. Read the plan document and verify it is current: `plan get <plan-name-or-id>` — confirm the document still matches reality before continuing work
+2. Read plan context: `plan get <plan-name-or-id>` — confirm spec and document still match reality before continuing work.
 3. Find pending or in-progress tasks: `task list --plan <id>`
-4. Continue from where the previous session left off
+4. Continue from where the previous session left off.
 
 ### Checking Progress
 
-Use `summary <plan-name-or-id>` for a quick overview, or `plan get <plan-name-or-id>` for full detail.
+Use `summary <plan-name-or-id>` for a compact task index and progress counts. Use `task list --plan <id>` to filter by status. Use `task get <id>` for full task detail. Use `plan get <id>` for the plan body (spec + document).

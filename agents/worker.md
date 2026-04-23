@@ -27,28 +27,30 @@ At the start of every conversation, do this:
 
 # When Given a Specific Task
 
-If you receive a plan ID and task ID (typically from the coordinator dispatching you):
+The dispatch prompt contains only a plan name/id and a task id — no descriptions or context. You are expected to fetch everything you need from the database.
 
-1. Fetch the task details:
-   ```bash
-   agentbook task get <task-id>
-   ```
-2. Fetch the full plan for context:
+If you receive a plan name/id and task id (typically from the coordinator dispatching you):
+
+1. Fetch the full plan body (spec + document):
    ```bash
    agentbook plan get <plan-id-or-name>
    ```
-3. Read the plan document from `plan get <plan-id-or-name>` output to understand the full context before starting work.
-4. Claim the task:
+   `plan get` returns the plan body only — `spec`, `document`, status, and timestamps. There is no `tasks` array in the output. Read `spec` to understand the requirements and `document` to understand the architecture and current state.
+2. Fetch the full task details:
+   ```bash
+   agentbook task get <task-id>
+   ```
+3. Claim the task:
    ```bash
    agentbook task update <task-id> --status in_progress --assignee "worker"
    ```
-5. Implement the task — use all available tools (edit, write, bash, etc.)
-6. Verify your work (run tests, type checks, etc. as appropriate)
-7. Mark the task as completed:
+4. Implement the task — use all available tools (edit, write, bash, etc.)
+5. Verify your work (run tests, type checks, etc. as appropriate)
+6. Mark the task as completed:
    ```bash
    agentbook task update <task-id> --status completed --notes "Brief summary of what was done"
    ```
-8. STOP and return control to the coordinator or user. Do not pick up additional plan tasks unless you are explicitly dispatched again with a new task.
+7. STOP and return control to the coordinator or user. Do not pick up additional plan tasks unless you are explicitly dispatched again with a new task.
 
 When you return control to the coordinator, your final assistant message is the authoritative progress report for that task. Make it concise and actionable: what was done, what to verify, and any surprises or follow-ups the coordinator should know about.
 
@@ -56,21 +58,26 @@ When you return control to the coordinator, your final assistant message is the 
 
 If the user asks you to work on a plan without specifying a task:
 
-1. Get the plan summary:
+1. Get the plan summary for a progress overview:
    ```bash
    agentbook summary <plan-id-or-name>
    ```
-2. List pending tasks:
+2. Fetch the plan body to read the spec (requirements) and document (architecture/current state):
+   ```bash
+   agentbook plan get <plan-id-or-name>
+   ```
+   `plan get` returns the plan body only — no tasks array. Use `spec` for requirements context and `document` for architecture and current state.
+3. List pending tasks:
    ```bash
    agentbook task list --plan <plan-id-or-name> --status pending
    ```
-3. Check for blocked or in-progress tasks that may have been abandoned:
+4. Check for blocked or in-progress tasks that may have been abandoned:
    ```bash
    agentbook task list --plan <plan-id-or-name> --status in_progress
    ```
-4. Pick the next actionable task (respecting dependencies and priority)
-5. Execute it following the steps above
-6. After completing a task, STOP and return control to the user. Do not automatically continue onto additional tasks from the plan.
+5. Pick the next actionable task (respecting dependencies and priority)
+6. Execute it following the steps above
+7. After completing a task, STOP and return control to the user. Do not automatically continue onto additional tasks from the plan.
 
 # When No Plan is Specified
 

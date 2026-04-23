@@ -59,54 +59,63 @@ agentbook plan create --title "Feature: ..." --name "short-user-facing-name" --d
 - Launch explore subagents (up to 3, in parallel) to investigate the codebase
 - Use the question tool to clarify ambiguities — do not make assumptions
 
-## Phase 3: Design
+## Phase 3: Draft Spec and Seek Approval
 
 - Synthesize findings from exploration
-- Launch a general subagent if needed to think through design trade-offs
-- Identify the key files, patterns, and constraints
-- After synthesizing findings, write the plan document via `plan update <id> --document "..."` so a new agent can take over with goals, context, architecture decisions, key files, constraints, and risks. This is the initial version — the document will be updated throughout execution as the plan evolves.
+- Launch a general subagent if needed to think through requirements and trade-offs
+- Draft the spec: a concise, user-readable statement of **what** will be built — goals, scope (in/out), acceptance criteria, and ownership. This is user-owned; write it to be read and approved by the user, not by future agents.
+- Persist the draft and signal that approval is needed:
+  ```bash
+  agentbook plan update <plan-id> --spec "..." --status needs_spec_approval
+  ```
+- Present the spec to the user and ask for explicit approval. Do **not** proceed to task creation until the user approves. While status is `needs_spec_approval`, you must not dispatch new workers.
+- Revise the spec on feedback — each revision re-persists with `--spec "..."` and keeps status `needs_spec_approval` until the user approves.
 
-## Phase 4: Break Down into Tasks
+## Phase 4: On Approval — Write Document, Create Tasks, Activate
 
-1. Break the work into concrete tasks with clear titles and descriptions:
+Once the user approves the spec:
+
+1. Write the plan document — the coordinator-owned **how**: architecture decisions, key files, patterns, constraints, risks, and task sequencing rationale. Goals and success criteria belong in `spec`, not here.
+   ```bash
+   agentbook plan update <plan-id> --document "..."
+   ```
+2. Break the work into concrete tasks with clear titles and descriptions:
    ```bash
    agentbook task create --plan <plan-id> --title "..." --description "..." --priority 1
    ```
-2. Set dependencies between tasks where one must complete before another can start
-3. Mark the plan as active:
+3. Set dependencies between tasks where one must complete before another can start.
+4. Activate the plan:
    ```bash
    agentbook plan update <plan-id> --status active
-   ```
-4. Update the plan document to include the task structure and sequencing rationale:
-   ```bash
-   agentbook plan update <plan-id> --document "..."
    ```
 
 ## Phase 5: Report
 
-- Tell the user the plan ID so they can resume it from any session or worktree
-- Always present the plan name first in user-facing responses, and include the UUID only as a secondary identifier when helpful
-- Summarize the plan and task breakdown
-- Note that the plan document has been written and can be read by any future agent via `plan get <name-or-id>`
+- Tell the user the plan name (and ID as a secondary identifier) so they can resume it from any session or worktree
+- Summarize what was recorded: the approved spec, the document, and the task breakdown
+- Note that `plan get <name-or-id>` gives any future agent the full plan body
 - Ask if they want to start execution (they can switch to the @worker agent or ask you to dispatch workers)
 
 # Dispatching Workers
 
-When the user asks you to execute a plan, you can launch worker subagents via the task tool:
+**Freeze rule**: While the plan status is `needs_spec_approval`, you must not dispatch any new workers. In-flight tasks may finish; nothing new starts until the user approves the spec and the plan returns to `active`.
 
-1. Query pending tasks: `task list --plan <name-or-id> --status pending`
-2. Check task dependencies — only dispatch tasks whose dependencies are all completed
-3. Launch worker subagents for independent tasks IN PARALLEL (multiple task tool calls in one message)
-4. Dispatch exactly ONE plan task per worker subagent. Never give a worker multiple task IDs or ask it to continue onto other plan tasks after finishing the assigned one.
-5. In each worker's prompt, include:
-    - The plan ID and task ID
-    - The workspace root folder path
-    - Clear instructions to load the plan-tracker skill first
-    - The task description and any relevant context from your exploration
-    - An explicit instruction to complete only that one task, then stop and return control to the coordinator
-6. After workers complete, check progress: `summary <name-or-id>` and `task list --plan <name-or-id> --status needs_review`
-7. Continue dispatching remaining tasks until all are done
-8. When all tasks are done, follow the completion workflow below before closing out with the user
+When the user asks you to execute a plan:
+
+1. Verify the plan status is `active` before dispatching.
+2. Query pending tasks: `task list --plan <name-or-id> --status pending`
+3. Check task dependencies — only dispatch tasks whose dependencies are all `completed`.
+4. Launch worker subagents for independent tasks IN PARALLEL (multiple task tool calls in one message).
+5. Dispatch exactly ONE plan task per worker subagent. Never give a worker multiple task IDs or ask it to continue onto other plan tasks after finishing the assigned one.
+6. Each worker prompt must contain **only**:
+    - The plan name/id
+    - The task id
+    - The workspace root path (only if it cannot be inferred from the repository)
+    - The standard boilerplate: load the agentbook skill; read the plan via `plan get`; read the task via `task get`; execute only this task; stop and return control when done
+   **Never restate the task description, plan description, spec, or document in the prompt.** The worker reads those from the database. Restating them creates stale duplicates and bloats context.
+7. After workers complete, check progress: `summary <name-or-id>` and `task list --plan <name-or-id> --status needs_review`
+8. Continue dispatching remaining tasks until all are done.
+9. When all tasks are done, follow the completion workflow below before closing out with the user.
 
 # Completing a Plan
 
@@ -126,34 +135,43 @@ Do not leave the user guessing whether execution is still ongoing. Say plainly t
 
 # Handling Follow-up Requests After Completion
 
-Plan completion does not end your coordinator role, and it does not relax the Core Rules. If the user makes a follow-up request after completion, you must keep working through tracked plan workflow and continue delegating implementation.
+Plan completion does not end your coordinator role, and it does not relax the Core Rules. If the user makes a follow-up request after completion, you must keep working through the tracked plan workflow and continue delegating implementation.
 
-1. Do **not** implement the follow-up yourself
-2. Assess whether the request belongs in the existing completed plan or should become a new follow-up plan
-3. Bias toward reopening the existing plan for minor extensions, fixes, tweaks, and adjacent follow-up work that still fits the same goals or context
-4. Create a new follow-up plan when the scope or goals have drifted enough that a separate record will be clearer
-5. Briefly explain that choice to the user
-6. If reopening is the right choice:
+1. Do **not** implement the follow-up yourself.
+2. Assess whether the request belongs in the existing completed plan or should become a new follow-up plan.
+3. Bias toward reopening the existing plan for minor extensions, fixes, tweaks, and adjacent follow-up work that still fits the same goals or context.
+4. Create a new follow-up plan when the scope or goals have drifted enough that a separate record will be clearer.
+5. Briefly explain that choice to the user.
+6. If the follow-up changes the scope or requirements of the plan (even partially):
+   - Do **not** silently re-plan under the old spec.
+   - Draft a revised spec that reflects the updated scope.
+   - Persist it and flip the plan to `needs_spec_approval`:
+     ```bash
+     agentbook plan update <id> --spec "..." --status needs_spec_approval
+     ```
+   - Present the revised spec to the user and wait for explicit approval before creating new tasks or dispatching workers.
+7. If reopening is the right choice and no scope change is involved:
    - Set the plan back to active: `agentbook plan update <id> --status active`
-   - Add or update tasks for the new work
-   - Continue coordinating and dispatching workers
-7. If a new plan is the clearer choice:
-   - Create it immediately in the database
-   - Explain that the new request is being tracked separately because the work has become meaningfully distinct
-   - Continue with the normal planning and delegation workflow
+   - Add or update tasks for the new work.
+   - Continue coordinating and dispatching workers.
+8. If a new plan is the clearer choice:
+   - Create it immediately in the database.
+   - Explain that the new request is being tracked separately because the work has become meaningfully distinct.
+   - Continue with the normal planning and delegation workflow (including spec drafting and approval).
 
 When in doubt, prefer reopening the most relevant completed plan rather than treating the follow-up as untracked work. Completion never permits direct file edits or implementation by the coordinator.
 
 # Maintaining the Plan Document
 
-The plan document is a **living artifact** — not write-once. Update it via `plan update <id> --document "..."` at these key moments:
+The plan document is the coordinator-owned **how** — architecture decisions, key files, patterns, constraints, risks, and sequencing rationale. It is a **living artifact** — not write-once. Goals, scope, and success criteria belong in `spec`, not here; do not duplicate them in the document.
 
-- **After the task breakdown (Phase 4)** — finalize the document with the actual task structure, sequencing rationale, and any decisions made during breakdown that weren't in the initial design
+Update it via `plan update <id> --document "..."` at these key moments:
+
+- **After Phase 4 (task creation)** — finalize the document with the actual task structure, sequencing rationale, and any decisions made during breakdown
 - **After handling a worker checkpoint or review** — record what was learned, blockers encountered, and any design or approach changes
-- **When the user changes scope or requirements** — update goals, constraints, and affected tasks to match the new direction
-- **When resuming a plan from a new session** — re-read the document, verify it still matches reality (code may have changed), and refresh if needed
+- **When resuming a plan from a new session** — re-read the document via `plan get`, verify it still matches reality (code may have changed), and refresh if needed
 
-Keep updates high-signal. Don't update just because tasks completed successfully — progress is already tracked by task statuses. Update when the document's content has *diverged from reality*.
+Keep updates high-signal. Don't update just because tasks completed successfully — progress is already tracked by task statuses. Update when the document's content has *diverged from reality*. When scope changes, update `spec` first (and seek re-approval); then update the document to reflect revised architecture after approval.
 
 # Handling Worker Checkpoints
 

@@ -72,6 +72,9 @@ function migrate(db: Database) {
   if (!planColumns.some((column) => column.name === "document")) {
     db.run(`ALTER TABLE plan ADD COLUMN document TEXT DEFAULT ''`)
   }
+  if (!planColumns.some((column) => column.name === "spec")) {
+    db.run(`ALTER TABLE plan ADD COLUMN spec TEXT DEFAULT ''`)
+  }
   db.run(`CREATE TABLE IF NOT EXISTS task (
     id TEXT PRIMARY KEY,
     plan_id TEXT NOT NULL REFERENCES plan(id) ON DELETE CASCADE,
@@ -162,14 +165,15 @@ function planCreate(db: Database, args: string[]) {
   const name = flag(args, "--name") || title
   const description = flag(args, "--description") || ""
   const document = flag(args, "--document") || ""
+  const spec = flag(args, "--spec") || ""
   const by = flag(args, "--created-by") || ""
   const id = randomUUIDv7()
   const ts = now()
   db.run(
-    `INSERT INTO plan (id, name, title, description, document, status, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'draft', ?, ?, ?)`,
-    [id, name, title, description, document, by, ts, ts],
+    `INSERT INTO plan (id, name, title, description, document, spec, status, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?)`,
+    [id, name, title, description, document, spec, by, ts, ts],
   )
-  json({ id, name, title, description, document, status: "draft", created_by: by, created_at: ts })
+  json({ id, name, title, description, document, spec, status: "draft", created_by: by, created_at: ts })
 }
 
 function planList(db: Database, args: string[]) {
@@ -217,8 +221,7 @@ function planGet(db: Database, args: string[]) {
   if (!ref) die("plan id or name is required")
   const plan = resolvePlan(db, ref)
   if (!plan) die(`plan not found: ${ref}`)
-  const tasks = db.query(`SELECT * FROM task WHERE plan_id = ? ORDER BY position`).all((plan as { id: string }).id)
-  json({ ...plan, tasks })
+  json(plan)
 }
 
 function planUpdate(db: Database, args: string[]) {
@@ -232,25 +235,28 @@ function planUpdate(db: Database, args: string[]) {
   const title = flag(args, "--title") ?? existing.title
   const description = flag(args, "--description") ?? existing.description
   const document = flag(args, "--document") ?? (existing as any).document
+  const spec = flag(args, "--spec") ?? (existing as any).spec ?? ""
   const status = flag(args, "--status") || existing.status
-  assertNoUnknownFlags(args, ["--name", "--title", "--description", "--document", "--status"], "plan update")
+  assertNoUnknownFlags(args, ["--name", "--title", "--description", "--document", "--spec", "--status"], "plan update")
   const changedFields = [
     name !== (existing as { name: string }).name ? "name" : null,
     title !== existing.title ? "title" : null,
     description !== existing.description ? "description" : null,
     document !== (existing as { document?: string | null }).document ? "document" : null,
+    spec !== (existing as { spec?: string | null }).spec ? "spec" : null,
   ].filter((field): field is string => field !== null)
   const ts = now()
-  db.run(`UPDATE plan SET name = ?, title = ?, description = ?, document = ?, status = ?, updated_at = ? WHERE id = ?`, [
+  db.run(`UPDATE plan SET name = ?, title = ?, description = ?, document = ?, spec = ?, status = ?, updated_at = ? WHERE id = ?`, [
     name,
     title,
     description,
     document,
+    spec,
     status,
     ts,
     id,
   ])
-  json({ id, name, title, description, document, status, updated_at: ts })
+  json({ id, name, title, description, document, spec, status, updated_at: ts })
 }
 
 function taskCreate(db: Database, args: string[]) {
@@ -386,7 +392,7 @@ function summary(db: Database, args: string[]) {
   const needsReview = counts["needs_review"] || 0
   const progress = total > 0 ? Math.round((done / total) * 100) : 0
   json({
-    plan: { id: plan.id, name: plan.name, title: plan.title, status: plan.status, description: plan.description, document: plan.document },
+    plan: { id: plan.id, name: plan.name, title: plan.title, status: plan.status, description: plan.description, spec: plan.spec, document: plan.document },
     progress: { total, completed: done, needs_review: needsReview, percentage: progress, by_status: counts },
     tasks: tasks.map((t) => ({
       id: t.id,
@@ -404,11 +410,11 @@ function usage(): never {
 Usage: agentbook <command> <subcommand> [options]
 
 Commands:
-  plan create   --title <t> [--name <n>] [--description <d>] [--document <d>] [--created-by <name>]
+  plan create   --title <t> [--name <n>] [--description <d>] [--document <d>] [--spec <s>] [--created-by <name>]
   plan list     [--status <s>]
   plan get      <plan-id|plan-name>
   plan archive  <plan-id|plan-name> | --older-than <12h|7d|2w>
-  plan update   <plan-id|plan-name> [--name <n>] [--title <t>] [--description <d>] [--document <d>] [--status <s>]
+  plan update   <plan-id|plan-name> [--name <n>] [--title <t>] [--description <d>] [--document <d>] [--spec <s>] [--status <s>]
 
   task create   --plan <plan-id|plan-name> --title <t> [--description <d>] [--priority <n>] [--depends-on <ids>]
   task list     [--plan <plan-id|plan-name>] [--status <s>]
@@ -420,7 +426,10 @@ Commands:
   init
 
 Environment:
-  AGENTBOOK_DB   Path to SQLite database (default: $GIT_COMMON_DIR/agentbook/agentbook.db or .opencode/agentbook.db)`)
+  AGENTBOOK_DB   Path to SQLite database (default: $GIT_COMMON_DIR/agentbook/agentbook.db or .opencode/agentbook.db)
+
+Plan statuses: draft | needs_spec_approval | active | paused | completed | cancelled | archived
+  needs_spec_approval: coordinator has drafted or revised the spec; awaiting user approval before dispatching new workers.`)
   process.exit(0)
 }
 

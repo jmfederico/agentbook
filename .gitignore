@@ -5,3 +5,4 @@ node_modules/
 .opencode
 tmp/
 test-results/
+*.bak

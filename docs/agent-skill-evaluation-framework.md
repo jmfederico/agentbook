@@ -25,7 +25,7 @@ When deciding whether behavior belongs in an agent, a skill, or local repo guida
 
 - **Coordinator owns plans.** Plan creation, spec drafting, approval gates, task creation, dependency management, and dispatch sequencing belong to the coordinator.
 - **Workers do not self-direct plan work.** A worker executes the assigned task, verifies the result, updates task status, and stops.
-- **Direct helper override is allowed.** If a human explicitly mentions a helper agent such as `worker` or `explore`, that mention can be treated as a request for direct bounded helper execution without requiring a plan or task.
+- **Direct helper override is allowed.** If a human explicitly mentions a helper agent such as `worker` or `scout`, that mention can be treated as a request for direct bounded helper execution without requiring a plan or task.
 - **Override mode does not transfer plan ownership.** Even when a helper agent is invoked directly, tracked plans, spec revisions, and orchestration remain coordinator-owned unless the user explicitly asks for tracked work.
 - **Plan/task references may be contextual in override mode.** A coordinator may pass a plan or task id to a helper agent as optional context in override mode, but that alone should not cause the helper to claim or mutate tracked task state.
 - **Skills are shared operational knowledge.** They should teach procedures, commands, checklists, and domain-specific workflows without redefining ownership boundaries.

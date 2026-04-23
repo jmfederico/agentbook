@@ -17,7 +17,7 @@ Cross-session plan tracking for AI agents, backed by SQLite.
 - Select `coordinator` as your active agent (set it as your default or switch to it in opencode) — it plans and keeps track of your work across sessions and worktrees. Do not just `@coordinator` from another agent; actually talk to `coordinator` as your active agent.
 - The coordinator drafts a `spec` (the "what") and asks you to approve it before breaking work into tasks. Once you approve, it creates tasks and dispatches workers.
 - Your normal human role is to provide goals, approve or revise specs when scope changes, and review results — not to manually babysit every implementation step.
-- Keep `coordinator` as your active agent for normal use. Direct `@worker` or `@explore` mentions are supported as an explicit helper-agent override path, but they are still exceptional/manual usage rather than the default workflow.
+- Keep `coordinator` as your active agent for normal use. Direct `@worker` or `@scout` mentions are supported as an explicit helper-agent override path, but they are still exceptional/manual usage rather than the default workflow.
 
 ## Requirements
 
@@ -55,10 +55,12 @@ ln -s "$REPO_PATH/agents/worker.md" ~/.config/opencode/agents/worker.md
 Optional helper agent:
 
 ```bash
-ln -s "$REPO_PATH/agents/explore.md" ~/.config/opencode/agents/explore.md
+ln -s "$REPO_PATH/agents/scout.md" ~/.config/opencode/agents/scout.md
 ```
 
-`explore` is a vendored, read-only investigation helper for coordinator-led research. It is optional; the primary workflow remains `coordinator` + `worker`.
+`scout` is a vendored, read-only investigation helper for coordinator-led research. It is optional; the primary workflow remains `coordinator` + `worker`.
+
+This rename avoids shadowing opencode's built-in `explore` agent. Use `scout` for the local vendored helper; the upstream `explore` agent remains a separate concept.
 
 Expose the CLI globally from that same checkout:
 
@@ -144,7 +146,7 @@ This repository supports two intentional operating modes:
    - Workers execute bounded tracked tasks and update task state in `agentbook`.
 
 2. **Direct helper-agent override work (manual/exception path)**
-   - If you explicitly mention a helper agent such as `@worker` or `@explore`, that mention acts as a request to run that helper directly.
+   - If you explicitly mention a helper agent such as `@worker` or `@scout`, that mention acts as a request to run that helper directly.
    - In this mode, the helper run does **not** require a plan or task unless you explicitly ask for tracked work.
    - The coordinator still owns tracked plans and orchestration; a direct helper run does not silently claim, update, or execute tracked plan work on its own.
    - A coordinator may still pass a plan or task reference as **optional context** to the helper in override mode, but that context is informative unless you explicitly want the helper to operate in tracked mode.
@@ -171,7 +173,7 @@ This repository defaults to a **coordinator-owned planning model** for tracked w
 
 - `coordinator` owns plans, specs, approval gates, task creation, dependency checks, and dispatch sequencing.
 - `worker` is a general-purpose executor that completes one assigned task, verifies the result, updates task status, and stops.
-- `explore` is an optional vendored helper for read-only codebase investigation when a parent agent wants a tighter research boundary.
+- `scout` is an optional vendored helper for read-only codebase investigation when a parent agent wants a tighter research boundary.
 - `skills` hold reusable procedures and operational knowledge that multiple agents can load.
 
 Direct helper-agent override runs are also supported when a human explicitly mentions a helper agent. That override path is intentionally separate from tracked plan execution: it bypasses plan/task requirements unless the user explicitly requests tracked work, and it does not change coordinator ownership of plans.
@@ -287,7 +289,7 @@ That location is shared automatically across all git worktrees for the same repo
 ```text
 .
 ├── agents/
-│   ├── explore.md
+│   ├── scout.md
 │   ├── coordinator.md
 │   └── worker.md
 ├── docs/
@@ -304,7 +306,7 @@ That location is shared automatically across all git worktrees for the same repo
 
 - `agents/coordinator.md` describes the planning and delegation role.
 - `agents/worker.md` describes the task execution role.
-- `agents/explore.md` defines the optional read-only exploration helper.
+- `agents/scout.md` defines the optional read-only exploration helper.
 - `docs/agent-skill-evaluation-framework.md` records how this repo decides whether behavior belongs in an agent, a skill, or shared documentation.
 - `docs/opencode-agent-inventory.md` records which upstream/opencode agents were evaluated and why only selected definitions were vendored locally.
 - `skills/agentbook/SKILL.md` contains the detailed CLI and workflow reference.

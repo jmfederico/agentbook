@@ -9,19 +9,20 @@ This document evaluates the built-in OpenCode agents against this repository's [
 | `build` | primary | Full-access development agent | Conflicts with the coordinator-first operating model because it encourages direct implementation from the active primary session instead of coordinator-owned planning and worker dispatch. | Do not vendor |
 | `plan` | primary | Analysis and planning without edits | Overlaps with `coordinator`, but lacks the agentbook-specific ownership boundary around plan registration, approval gates, task tracking, and dispatch. | Do not vendor |
 | `general` | subagent | General-purpose execution/research helper with broad tool access | Overlaps heavily with `worker` and is less bounded than this repo's single-task executor contract. | Do not vendor |
-| `explore` | subagent | Fast read-only codebase exploration | Useful as a distinct read-only investigation boundary for coordinator-led research, especially when understanding a codebase before planning or implementation. | Vendor locally as `agents/explore.md` |
+| `explore` | subagent | Fast read-only codebase exploration | Useful as a distinct read-only investigation boundary for coordinator-led research, especially when understanding a codebase before planning or implementation. | Vendor locally as `agents/scout.md` under the renamed helper `scout` |
 
 ## Selected vendored agent
 
-### `explore`
+### `scout` (vendored from upstream `explore`)
 
 - **Role:** read-only codebase exploration and fact gathering for a parent agent.
-- **Status in this repo:** **optional helper**. The first-class workflow remains tracked `coordinator` + `worker`, but `explore` may also be invoked directly as an explicit helper-agent override when a human wants a one-off read-only assist.
+- **Status in this repo:** **optional helper**. The first-class workflow remains tracked `coordinator` + `worker`, but `scout` may also be invoked directly as an explicit helper-agent override when a human wants a one-off read-only assist.
+- **Why the local name differs:** this repo vendors the upstream `explore` agent under the name `scout` so it does not shadow or surprise users who expect opencode's built-in `explore` agent.
 - **Why it passed the framework:** it has a meaningful autonomy and permission boundary (read-only exploration) that is distinct from both planning and execution.
 - **Expected adaptations from upstream behavior:**
   - keep it focused on investigation only; it should not create plans, update task state, or act like an implementer
   - align the wording with this repository's coordinator-owned planning model
-  - make clear that direct `@explore` invocation does not require a plan/task unless the user explicitly wants tracked work
+  - make clear that direct `@scout` invocation does not require a plan/task unless the user explicitly wants tracked work
   - prefer repository search and read tools over any change-capable workflow
 
 ## Rejected candidates

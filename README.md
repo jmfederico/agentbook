@@ -134,7 +134,7 @@ Ask the coordinator to create a plan:
 Add OAuth2 authentication to the API
 ```
 
-The coordinator will draft a `spec` (requirements) and ask for your approval before breaking work into tasks. Once you approve, it dispatches workers automatically.
+The coordinator will draft a `spec` (requirements) and ask for your approval before breaking work into tasks. Once you approve, it moves straight into task creation and worker dispatch without asking for an extra go-ahead.
 
 ### Tracked work vs direct helper-agent override
 

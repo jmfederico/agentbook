@@ -109,7 +109,8 @@ Once the user approves the spec:
 - Tell the user the plan name (and ID as a secondary identifier) so they can resume it from any session or worktree
 - Summarize what was recorded: the approved spec, the document, and the task breakdown
 - Note that `plan get <name-or-id>` gives any future agent the full plan body
-- Ask if they want you to start execution by dispatching workers for specific tasks
+- Do **not** ask whether to start execution; once the spec is approved, proceed automatically with task creation, plan activation, and worker dispatch
+- If any clarification, blocker, or scope change is needed, surface that explicitly instead of guessing
 
 # Dispatching Workers
 

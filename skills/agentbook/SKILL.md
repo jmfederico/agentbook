@@ -136,7 +136,7 @@ The coordinator follows a 5-phase flow:
 2. **Understand**: explore the codebase to understand scope and constraints.
 3. **Draft spec + approval gate**: write a spec covering goals, scope, non-goals, and acceptance criteria. Update the plan: `plan update <id> --spec "..." --status needs_spec_approval`. Present the spec to the user and wait for approval. Do not create tasks or dispatch workers yet. Revise and re-propose if the user requests changes.
 4. **On approval — activate**: once the user approves, write the architecture document, break work into tasks (`task create --plan <id> --title "..." --priority <n>`), set dependencies where needed, and mark the plan active: `plan update <id> --document "..." --status active`.
-5. **Execute on request**: keep plan ownership with the coordinator, dispatch workers for specific tasks, and check progress with `summary` or `task list`.
+5. **Execute automatically after approval**: keep plan ownership with the coordinator, proceed into worker dispatch without asking the user whether to start, and check progress with `summary` or `task list`.
 
 ### Dispatching Workers (Coordinator)
 
@@ -153,6 +153,8 @@ Dispatch prompts are **pointer-only**. Include only:
 Never restate task titles, descriptions, or plan context in the prompt. The worker reads those directly from the DB.
 
 **Freeze rule:** while plan status is `needs_spec_approval`, do not dispatch new workers. Let any in-flight tasks finish; start nothing new until the user re-approves the spec.
+
+After approval, worker dispatch should happen automatically as part of normal coordinator execution; only pause for user input when there is a blocker, clarification request, or scope change.
 
 ### Executing Tasks (Worker)
 

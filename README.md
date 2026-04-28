@@ -64,9 +64,9 @@ Also add the bundled tmp-folder instruction to your global opencode config so ag
 }
 ```
 
-`scout` is a vendored, read-only investigation helper for coordinator-led research.
+`scout` is a vendored, read-only investigation helper for coordinator-led research. It can use bounded bash commands for read-only git and configured remote-provider inspection, limited to GET/read-only provider checks and non-mutating shell use, but it must never mutate files or repo state, including checkout/reset/clean/switch/merge/rebase/push/fetch/pull, redirects, write-producing pipes, or env/config changes.
 
-`deep-review` is a read-only review helper for slower, higher-scrutiny code review passes. Use it when you want a stronger critique boundary than the default exploration helper.
+`deep-review` is a read-only review helper for slower, higher-scrutiny code review passes. It can also use bounded bash commands for read-only git and configured remote-provider inspection, limited to GET/read-only provider checks and non-mutating shell use, but it must never mutate files or repo state, including checkout/reset/clean/switch/merge/rebase/push/fetch/pull, redirects, write-producing pipes, or env/config changes. Use it when you want a stronger critique boundary than the default exploration helper.
 
 This rename avoids shadowing opencode's built-in `explore` agent. Use `scout` for the local vendored helper; the upstream `explore` agent remains a separate concept.
 
@@ -189,8 +189,8 @@ This repository defaults to a **coordinator-owned planning model** for tracked w
 
 - `coordinator` owns plans, specs, approval gates, task creation, dependency checks, and dispatch sequencing.
 - `worker` is a general-purpose executor that completes one assigned task, verifies the result, updates task status, and stops.
-- `scout` is a vendored helper for read-only codebase investigation when a parent agent wants a tighter research boundary.
-- `deep-review` is a read-only helper for thorough review passes and higher-confidence critique.
+- `scout` is a vendored helper for read-only codebase investigation when a parent agent wants a tighter research boundary. It may use bash for read-only git and configured remote-provider inspection only, with GET/read-only provider checks and no mutating shell features such as checkout/reset/clean/switch/merge/rebase/push/fetch/pull, redirects, or write-producing pipes.
+- `deep-review` is a read-only helper for thorough review passes and higher-confidence critique. It may also use bash for read-only git and configured remote-provider inspection only, with GET/read-only provider checks and no mutating shell features such as checkout/reset/clean/switch/merge/rebase/push/fetch/pull, redirects, or write-producing pipes.
 - `skills` hold reusable procedures and operational knowledge that multiple agents can load.
 
 Direct helper-agent override runs are also supported when a human explicitly mentions a helper agent. That override path is intentionally separate from tracked plan execution: it bypasses plan/task requirements unless the user explicitly requests tracked work, and it does not change coordinator ownership of plans.

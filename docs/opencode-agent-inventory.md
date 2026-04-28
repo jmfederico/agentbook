@@ -21,6 +21,8 @@ This document evaluates the built-in OpenCode agents against this repository's [
 - **Why it passed the framework:** it has a meaningful autonomy and permission boundary (read-only exploration) that is distinct from both planning and execution.
 - **Expected adaptations from upstream behavior:**
   - keep it focused on investigation only; it should not create plans, update task state, or act like an implementer
+  - allow bounded bash use for read-only git and configured remote-provider investigation only; examples include `git status`, `git log`, `git show`, `git diff`, and read-only provider CLI/API requests for the configured forge (for example `gh`, `glab`, or equivalent) when they are GET/read-only only
+  - never permit bash-driven mutation of files, git state, remote-provider state, or the environment, including checkout/reset/clean/switch/merge/rebase/push/fetch/pull, create/edit/delete/merge/comment/approve/label/assign/auth/config changes, redirects, write-producing pipes, environment/config changes, or chained mutating commands
   - align the wording with this repository's coordinator-owned planning model
   - make clear that direct `@scout` invocation does not require a plan/task unless the user explicitly wants tracked work
   - prefer repository search and read tools over any change-capable workflow
@@ -30,9 +32,11 @@ This document evaluates the built-in OpenCode agents against this repository's [
 - **Role:** slow, read-only review pass for code quality, correctness, and architecture critique.
 - **Status in this repo:** **optional helper**. It complements `scout` by favoring higher-scrutiny review over quick investigation.
 - **Why it exists:** this repository wants a distinct helper for thorough code review without expanding the default worker role or mixing review into planning.
-- **Boundary:** it should remain read-only and advisory; it must not claim tasks, mutate state, or behave like an implementer.
+- **Boundary:** it should remain read-only and advisory; it may use bash for bounded read-only repository investigation, but it must not claim tasks, mutate state, or behave like an implementer.
 - **Expected adaptations from repository workflow:**
   - use it when the reviewer needs a stricter scrutiny boundary than `scout`
+  - allow bounded bash use for read-only git and configured remote-provider investigation only; examples include `git status`, `git log`, `git show`, `git diff`, and read-only provider CLI/API requests for the configured forge (for example `gh`, `glab`, or equivalent) when they are GET/read-only only
+  - never permit bash-driven mutation of files, git state, remote-provider state, or the environment, including checkout/reset/clean/switch/merge/rebase/push/fetch/pull, create/edit/delete/merge/comment/approve/label/assign/auth/config changes, redirects, write-producing pipes, environment/config changes, or chained mutating commands
   - keep the agent definition and README config in sync so users can install and override it consistently
   - preserve the repo's coordinator-owned planning model by keeping review output advisory only
 

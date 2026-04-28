@@ -234,6 +234,8 @@ agentbook plan list --status needs_spec_approval
 agentbook plan get oauth2-auth
 agentbook plan archive oauth2-auth
 agentbook plan archive --older-than 7d
+agentbook plan archive-stale
+agentbook archive-stale
 agentbook plan update oauth2-auth --status active
 agentbook plan update oauth2-auth --spec "Revised requirements"
 ```

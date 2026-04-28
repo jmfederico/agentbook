@@ -43,6 +43,8 @@ agentbook plan list --status active
 agentbook plan get <plan-id-or-name>
 agentbook plan archive <plan-id-or-name>
 agentbook plan archive --older-than 7d
+agentbook plan archive-stale
+agentbook archive-stale
 agentbook plan update <plan-id-or-name> --status active [--spec <spec>] [--document <doc>]
 ```
 

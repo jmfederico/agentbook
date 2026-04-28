@@ -582,6 +582,54 @@ describe("plan archive", () => {
   })
 })
 
+describe("plan archive-stale", () => {
+  const tmp = freshTmpDir()
+  const db = `${tmp}/archive-stale.db`
+
+  it("archives stale plans on the default 7d cutoff without touching tasks", () => {
+    const stale = mkPlan(db, "Stale Plan", ["--name", "stale-plan"])
+    const fresh = mkPlan(db, "Fresh Plan", ["--name", "fresh-plan"])
+    const staleTask = mkTask(db, stale.id as string, "Stale task")
+
+    const sqlDb = new Database(db)
+    try {
+      sqlDb.run(`UPDATE plan SET updated_at = ? WHERE id = ?`, [Date.now() - 8 * 24 * 60 * 60 * 1000, stale.id])
+    } finally {
+      sqlDb.close()
+    }
+
+    const r = runCli(["plan", "archive-stale"], { dbPath: db })
+    expect(r.exitCode).toBe(0)
+    const archived = json<Array<Record<string, unknown>>>(r.stdout)
+    expect(archived).toHaveLength(1)
+    expect(archived[0].id).toBe(stale.id)
+    expect(archived[0].status).toBe("archived")
+
+    expect(getPlan(db, stale.id as string).status).toBe("archived")
+    expect(getPlan(db, fresh.id as string).status).toBe("draft")
+
+    const task = runCli(["task", "get", staleTask.id as string], { dbPath: db })
+    expect(task.exitCode).toBe(0)
+    expect(json<Record<string, unknown>>(task.stdout).status).toBe("pending")
+  })
+
+  it("accepts a custom older-than cutoff", () => {
+    const plan = mkPlan(db, "Custom Cutoff Plan", ["--name", "custom-cutoff-plan"])
+    const sqlDb = new Database(db)
+    try {
+      sqlDb.run(`UPDATE plan SET updated_at = ? WHERE id = ?`, [Date.now() - 2 * 60 * 60 * 1000, plan.id])
+    } finally {
+      sqlDb.close()
+    }
+
+    const r = runCli(["archive-stale", "--older-than", "1h"], { dbPath: db })
+    expect(r.exitCode).toBe(0)
+    const archived = json<Array<Record<string, unknown>>>(r.stdout)
+    expect(archived).toHaveLength(1)
+    expect(archived[0].id).toBe(plan.id)
+  })
+})
+
 // ─── Error paths ──────────────────────────────────────────────────────────────
 
 describe("Error paths", () => {

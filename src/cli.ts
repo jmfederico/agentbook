@@ -204,6 +204,21 @@ function planList(db: Database, args: string[]) {
   json(rows)
 }
 
+function archivePlansOlderThan(db: Database, olderThan: string) {
+  const maxAge = parseDuration(olderThan)
+  const cutoff = now() - maxAge
+  const candidates = db
+    .query(`SELECT * FROM plan WHERE status IN ('draft', 'active') AND updated_at < ? ORDER BY updated_at ASC`)
+    .all(cutoff) as Array<Record<string, unknown>>
+
+  const ts = now()
+  for (const plan of candidates) {
+    db.run(`UPDATE plan SET status = 'archived', updated_at = ? WHERE id = ?`, [ts, plan.id])
+  }
+
+  return candidates.map((plan) => ({ ...plan, status: "archived", updated_at: ts }))
+}
+
 function planArchive(db: Database, args: string[]) {
   const ref = positional(args)
   const olderThan = flag(args, "--older-than")
@@ -222,18 +237,15 @@ function planArchive(db: Database, args: string[]) {
     return
   }
 
-  const maxAge = parseDuration(olderThan!)
-  const cutoff = now() - maxAge
-  const candidates = db
-    .query(`SELECT * FROM plan WHERE status IN ('draft', 'active') AND updated_at < ? ORDER BY updated_at ASC`)
-    .all(cutoff) as Array<Record<string, unknown>>
+  json(archivePlansOlderThan(db, olderThan!))
+}
 
-  const ts = now()
-  for (const plan of candidates) {
-    db.run(`UPDATE plan SET status = 'archived', updated_at = ? WHERE id = ?`, [ts, plan.id])
-  }
+function planArchiveStale(db: Database, args: string[]) {
+  if (positional(args)) die("plan id or name is not supported for plan archive-stale")
+  assertNoUnknownFlags(args, ["--older-than"], "plan archive-stale")
 
-  json(candidates.map((plan) => ({ ...plan, status: "archived", updated_at: ts })))
+  const olderThan = flag(args, "--older-than") || "7d"
+  json(archivePlansOlderThan(db, olderThan))
 }
 
 function planGet(db: Database, args: string[]) {
@@ -443,7 +455,10 @@ Commands:
   plan list     [--status <s>]
   plan get      <plan-id|plan-name>
   plan archive  <plan-id|plan-name> | --older-than <12h|7d|2w>
+  plan archive-stale [--older-than <7d>]
   plan update   <plan-id|plan-name> [--name <n>] [--title <t>] [--description <d>] [--document <d>] [--spec <s>] [--status <s>]
+
+  archive-stale [--older-than <7d>]
 
   task create   --plan <plan-id|plan-name> --title <t> [--description <d>] [--priority <n>] [--depends-on <ids>]
   task list     [--plan <plan-id|plan-name>] [--status <s>]
@@ -492,6 +507,7 @@ try {
     else if (sub === "list") planList(db, rest)
     else if (sub === "get") planGet(db, rest)
     else if (sub === "archive") planArchive(db, rest)
+    else if (sub === "archive-stale") planArchiveStale(db, rest)
     else if (sub === "update") planUpdate(db, rest)
     else die(`unknown plan subcommand: ${sub}`)
   } else if (cmd === "task") {
@@ -502,6 +518,8 @@ try {
     else die(`unknown task subcommand: ${sub}`)
   } else if (cmd === "summary") {
     summary(db, rest.length ? rest : args.slice(1))
+  } else if (cmd === "archive-stale") {
+    planArchiveStale(db, args.slice(1))
   } else {
     die(`unknown command: ${cmd}`)
   }

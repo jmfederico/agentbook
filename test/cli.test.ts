@@ -458,7 +458,7 @@ describe("summary shape", () => {
 
     runCli(["task", "update", t2.id as string, "--status", "completed", "--notes", "done"], { dbPath: db })
     runCli(["task", "update", t3.id as string, "--status", "completed"], { dbPath: db })
-    runCli(["task", "update", t4.id as string, "--status", "needs_review"], { dbPath: db })
+    runCli(["task", "update", t4.id as string, "--status", "needs_guidance"], { dbPath: db })
 
     const r = runCli(["summary", id], { dbPath: db })
     expect(r.exitCode).toBe(0)
@@ -468,7 +468,7 @@ describe("summary shape", () => {
     const progress = s.progress as Record<string, unknown>
     expect(progress.total).toBe(4)
     expect(progress.completed).toBe(2)
-    expect(progress.needs_review).toBe(1)
+    expect(progress.needs_guidance).toBe(1)
     expect(progress.percentage).toBe(50)
 
     // Plan subobject includes spec and document
@@ -494,6 +494,32 @@ describe("summary shape", () => {
     const unassigned = tasks.find((t) => t.id === t1.id)!
     expect(unassigned.assignee).toBeNull()
     expect(unassigned.worktree_dir).toBeNull()
+  })
+
+  it("normalizes legacy needs_review tasks in list, get, and summary outputs", () => {
+    const plan = mkPlan(db, "Legacy Status Plan", ["--name", "legacy-status-plan"])
+    const task = mkTask(db, plan.id as string, "Legacy Task")
+
+    const sqlDb = new Database(db)
+    try {
+      sqlDb.run(`UPDATE task SET status = 'needs_review' WHERE id = ?`, [task.id])
+    } finally {
+      sqlDb.close()
+    }
+
+    const list = runCli(["task", "list", "--plan", plan.id as string, "--status", "needs_guidance"], { dbPath: db })
+    expect(list.exitCode).toBe(0)
+    const listed = json<Array<Record<string, unknown>>>(list.stdout)
+    expect(listed.some((t) => t.id === task.id && t.status === "needs_guidance")).toBe(true)
+
+    const got = runCli(["task", "get", task.id as string], { dbPath: db })
+    expect(got.exitCode).toBe(0)
+    expect(json<Record<string, unknown>>(got.stdout).status).toBe("needs_guidance")
+
+    const summary = runCli(["summary", plan.id as string], { dbPath: db })
+    expect(summary.exitCode).toBe(0)
+    const progress = json<Record<string, unknown>>(summary.stdout).progress as Record<string, unknown>
+    expect(progress.needs_guidance).toBe(1)
   })
 })
 

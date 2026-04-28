@@ -93,8 +93,8 @@ Plan JSON includes both a stable UUID `id` and a user-facing `name`. Prefer show
 - `pending`
 - `in_progress`
 - `completed`
-- `blocked`
-- `needs_review` — worker paused for coordinator review
+- `blocked` — hard stop waiting on an external dependency, permission, or outside input
+- `needs_guidance` — worker made progress but needs coordinator judgment, clarification, or a checkpoint. Legacy `needs_review` records still normalize to this status during the transition.
 - `cancelled`
 
 ### Dependencies
@@ -136,6 +136,7 @@ The coordinator follows a 5-phase flow:
 2. **Understand**: explore the codebase to understand scope and constraints.
 3. **Draft spec + approval gate**: write a spec covering goals, scope, non-goals, and acceptance criteria. Update the plan: `plan update <id> --spec "..." --status needs_spec_approval`. Present the spec to the user and wait for approval. Do not create tasks or dispatch workers yet. Revise and re-propose if the user requests changes.
 4. **On approval — activate**: once the user approves, write the architecture document, break work into tasks (`task create --plan <id> --title "..." --priority <n>`), set dependencies where needed, and mark the plan active: `plan update <id> --document "..." --status active`.
+   - For repeated review/checkpoint follow-ups, prefer ordinal pass titles like `Review pass 1`, `Review pass 2`, etc., with an optional purpose qualifier after the number.
 5. **Execute automatically after approval**: keep plan ownership with the coordinator, proceed into worker dispatch without asking the user whether to start, and check progress with `summary` or `task list`.
 
 ### Dispatching Workers (Coordinator)
@@ -162,9 +163,10 @@ After approval, worker dispatch should happen automatically as part of normal co
 2. Read task details: `task get <task-id>` — returns full task body including description and dependencies.
 3. Check dependencies: confirm all `depends_on` tasks are `completed` before starting.
 4. Claim the task: `task update <id> --status in_progress --assignee "worker" --session "<session>"`
+   - For review/checkpoint follow-ups, use a deterministic session label such as `review-pass-2` that matches the numbered task title; avoid stacking adjectives like `final final review`.
 5. Do the implementation work.
 
-   If the task is large or you encounter issues, set status to `needs_review` with notes summarizing progress and concerns, then stop. The coordinator will review and decide next steps.
+   If the task is large, you are looping, or the next step would require guessing, set status to `needs_guidance` with notes summarizing progress, what you tried, and what decision is needed. If the stop is caused by an external dependency, permission, or outside input you cannot obtain locally, use `blocked` instead. Then stop and let the coordinator decide next steps.
 
 6. Mark complete: `task update <id> --status completed --notes "summary of what was done"`
 7. Return control. Do not continue onto another plan task in the same worker session unless explicitly re-dispatched.

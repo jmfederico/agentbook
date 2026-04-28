@@ -119,9 +119,12 @@ Once the user approves the spec:
    agentbook plan update <plan-id> --document "..."
    ```
 2. Break the work into concrete tasks with clear titles and descriptions:
-   ```bash
-   agentbook task create --plan <plan-id> --title "..." --description "..." --priority 1
-   ```
+    ```bash
+    agentbook task create --plan <plan-id> --title "..." --description "..." --priority 1
+    ```
+   - For repeated review or checkpoint follow-ups, use ordinal pass names like `Review pass 1`, `Review pass 2`, etc.
+   - If you need a purpose qualifier, append it after the pass number (for example, `Review pass 2: docs sync`) instead of stacking adjectives like `final final review`.
+   - Use matching session labels such as `review-pass-1`, `review-pass-2`, etc. so the follow-up chain stays deterministic.
 3. Set dependencies between tasks where one must complete before another can start.
 4. Activate the plan:
     ```bash
@@ -161,8 +164,8 @@ When the user asks you to execute a plan:
     - The workspace root path (only if it cannot be inferred from the repository)
     - The standard boilerplate: load the agentbook skill; read the plan via `plan get`; read the task via `task get`; execute only this task; stop and return control when done
    **Never restate the task description, plan description, spec, or document in the prompt.** The worker reads those from the database. Restating them creates stale duplicates and bloats context.
-7. After workers complete, check progress: `summary <name-or-id>` and `task list --plan <name-or-id> --status needs_review`
-8. Continue dispatching remaining tasks until all are done.
+7. After workers complete, check progress: `summary <name-or-id>`, `task list --plan <name-or-id> --status needs_guidance`, and `task list --plan <name-or-id> --status blocked`.
+8. Continue dispatching remaining ready tasks until all non-blocked work is done.
 9. When all tasks are done, follow the completion workflow below before closing out with the user.
 
 Plan ownership stays with the coordinator throughout execution. Workers execute assigned tasks; they do not independently choose plans, pick the next task, or manage the overall workflow unless a future approved spec explicitly changes that rule.
@@ -237,14 +240,22 @@ Keep updates high-signal. Don't update just because tasks completed successfully
 
 # Handling Worker Checkpoints
 
-When a worker sets a task to `needs_review`, it means they hit a checkpoint and need coordinator guidance:
+When a worker sets a task to `needs_guidance` or `blocked`, treat it as a stop signal and respond with a concrete next step:
+
+- `needs_guidance` means the worker made partial progress but now needs a judgment call, a smaller split, a revised approach, or clarification of underspecified requirements. Legacy `needs_review` records are treated the same way during the transition.
+- When a `needs_guidance` checkpoint becomes a follow-up task, increment the review pass number instead of inventing a new adjective-heavy label.
+- `blocked` means the worker cannot continue because of an external dependency, permission, or required input that is not currently available.
+
+Blocked tasks should be surfaced in the normal progress check alongside `needs_guidance` tasks so they stay visible in the plan rather than disappearing from the execution loop.
 
 1. Read the task details and notes: `task get <id>`
 2. Read the task notes and consider the worker's return message to the coordinator
 3. Decide one of:
-   - The task is on track: update notes with guidance, set the task back to `pending`, and re-dispatch it
-   - The task is too large: split it into smaller subtasks and cancel the original task
-   - The plan itself needs adjustment: update the **plan document** and task list accordingly
+   - The task is on track and the blocker is cleared: update notes with guidance, set the task back to `pending`, and re-dispatch it
+   - The task is still externally blocked: leave it `blocked`, record exactly what external dependency, input, or permission is missing, and re-dispatch only after it becomes available
+   - The task is too large or the blocker shows the approach is wrong: split it into smaller subtasks, replace it with a better-scoped task, or update the **plan document** and task list accordingly
+
+Blocked is not a dead end; it is a parked task with a known external dependency or outside input. Keep it visible in the plan, refresh the notes when the missing outside input changes, and only convert it back to `pending` once the blocker has been resolved.
 
 # Resuming Plans
 

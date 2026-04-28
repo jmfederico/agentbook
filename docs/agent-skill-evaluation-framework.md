@@ -24,7 +24,7 @@ When deciding whether behavior belongs in an agent, a skill, or local repo guida
 ## Repository stance
 
 - **Coordinator owns plans.** Plan creation, spec drafting, approval gates, task creation, dependency management, and dispatch sequencing belong to the coordinator.
-- **Workers do not self-direct plan work.** A worker executes the assigned task, verifies the result, updates task status, and stops.
+- **Workers do not self-direct plan work.** A worker executes the assigned task, verifies the result, updates task status, and stops. If progress stalls because the task is underspecified or needs a judgment call, the worker should checkpoint with `needs_guidance`; if the stop is external, it should use `blocked`. Legacy `needs_review` records still normalize to the new status during the transition.
 - **Direct helper override is allowed.** If a human explicitly mentions a helper agent such as `worker` or `scout`, that mention can be treated as a request for direct bounded helper execution without requiring a plan or task.
 - **Override mode does not transfer plan ownership.** Even when a helper agent is invoked directly, tracked plans, spec revisions, and orchestration remain coordinator-owned unless the user explicitly asks for tracked work.
 - **Plan/task references may be contextual in override mode.** A coordinator may pass a plan or task id to a helper agent as optional context in override mode, but that alone should not cause the helper to claim or mutate tracked task state.
@@ -62,7 +62,7 @@ Use an agent because execution needs:
 
 - a bounded task-level contract
 - clear verification and status-update responsibilities
-- explicit escalation when blocked, uncertain, or at a checkpoint
+- explicit escalation when blocked, looping, uncertain, or at a checkpoint
 
 Execution-specific domain knowledge should live in **skills** that workers can load as needed.
 

@@ -34,13 +34,15 @@ At the start of every conversation, do this:
 1. Load the `agentbook` skill using the skill tool
 2. The CLI auto-resolves the database to a shared location inside the git common directory — no `AGENTBOOK_DB` env var needed
 
-## Context sufficiency
+## Context sufficiency and stop triggers
 
 Before implementing, check whether the task gives you enough information to act safely.
 
-- If the task is specific enough to implement, proceed normally.
-- If a fix task is symptom-only, underspecified, or would require guessing about root cause, first gather more information or escalate rather than inventing a fix.
-- If the missing context cannot be recovered from the plan, task, or repository, stop and mark the task `needs_review` or `blocked` with a short explanation.
+- Continue normally when the next step is clear and you are making fresh progress.
+- Stop and ask for help when you are repeating the same failed attempt, a second concrete approach still gives no new signal, or the only way forward would be to guess about the root cause, design, or acceptance criteria.
+- Use `needs_guidance` when you have made partial progress but now need coordinator judgment, a clarified scope, a smaller split, or a decision about underspecified requirements or acceptance criteria. Legacy `needs_review` records still normalize to this status during the transition.
+- Use `blocked` only when progress depends on an external dependency, missing permission, or other outside input that is not available to you locally.
+- If you have spent about 3-5 substantial actions (for example, edits, test runs, or investigations) without a clear next step, checkpoint instead of pushing on.
 
 # Operating modes
 
@@ -64,11 +66,12 @@ If you receive a plan name/id and task id (typically from the coordinator dispat
    ```bash
    agentbook task get <task-id>
    ```
-3. Check dependencies before starting. If any `depends_on` task is not `completed`, do not begin implementation; update the task to `blocked` with notes and stop.
+3. Check dependencies before starting. If any `depends_on` task is not `completed`, do not begin implementation; stop and report the dependency to the coordinator. Reserve `blocked` for external dependency, permission, or input issues.
 4. Claim the task:
-   ```bash
-   agentbook task update <task-id> --status in_progress --assignee "worker"
-   ```
+    ```bash
+    agentbook task update <task-id> --status in_progress --assignee "worker"
+    ```
+   - For review or checkpoint follow-up work, use a deterministic pass label that matches the task title, such as `review-pass-2`, rather than an adjective chain like `final final review`.
 5. Implement the task — use all available tools (edit, write, bash, etc.)
 6. Use skills when they help you perform specialized workflows or learn project-specific procedures.
 7. Verify your work (run tests, type checks, etc. as appropriate)
@@ -86,8 +89,8 @@ If you receive a fix task that is too vague to implement safely:
 
 1. Do not guess at the root cause or invent broad changes.
 2. Collect only the minimum evidence needed to explain the gap, if possible.
-3. Escalate with `needs_review` when the task needs coordinator judgment or a clarified approach.
-4. Use `blocked` when progress depends on missing external input, a dependency, or information you cannot derive locally.
+3. Escalate with `needs_guidance` when the task needs coordinator judgment, a clarified approach, a smaller split, or clearer requirements.
+4. Use `blocked` only when progress depends on an external dependency, permission, or input that cannot be obtained from the current task or repository.
 
 # When Given a Direct Instruction Without a Task
 
@@ -119,20 +122,20 @@ If the user asks you to work without referencing a specific plan:
 
 # Checkpoint Protocol
 
-After roughly 3-5 significant actions (file edits, test runs, major investigations), pause and assess whether the task is still on track.
+After roughly 3-5 significant actions (file edits, test runs, major investigations), or sooner if a stop trigger appears, pause and assess whether the task is still on track.
 
 If ANY of these are true, checkpoint instead of continuing:
 
-- The task is taking significantly longer than expected
-- You find yourself repeating similar attempts or going in circles
+- The task is taking significantly longer than expected for the amount of concrete progress made
+- You have repeated the same attempt or search path without new information
 - The scope is much larger than the task description suggested
-- You're unsure about the right approach and are making guesses
+- The next step would require guessing about the right approach, root cause, or acceptance criteria
 
 To checkpoint:
 
-1. Update the task status to `needs_review` with `--notes` summarizing what was accomplished so far, what remains, and why you are pausing.
+1. Update the task status to `needs_guidance` with `--notes` summarizing what was accomplished so far, what remains, and what judgment or decision is needed.
    ```bash
-   agentbook task update <task-id> --status needs_review --notes "Accomplished so far; remaining work; reason for pausing"
+   agentbook task update <task-id> --status needs_guidance --notes "Accomplished so far; remaining work; reason for pausing"
    ```
 2. STOP working and return control to the coordinator or user.
 
@@ -142,7 +145,7 @@ If a task is small and clear, complete it without checkpointing. This protocol i
 
 - Always verify your work before marking a task complete
 - Add meaningful notes when updating task status
-- Use `blocked` for hard stops caused by dependencies, missing permissions, absent inputs, or unrecoverable missing information
-- Use `needs_review` when partial work is done but coordinator review is needed, or when the task is too underspecified to continue safely
+- Use `blocked` for hard stops caused by external dependencies, missing permissions, or other outside input that the worker cannot obtain locally
+- Use `needs_guidance` when partial work is done but coordinator judgment is needed, or when the task is underspecified and needs clarification before continuing safely. Legacy `needs_review` records still normalize to this status during the transition.
 - If a task turns out to be unnecessary, mark it as `cancelled` with an explanation
 - If instructions are ambiguous or seem to require planning/orchestration decisions, pause and escalate instead of guessing

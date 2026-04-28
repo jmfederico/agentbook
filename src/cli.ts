@@ -97,6 +97,26 @@ function migrate(db: Database) {
 
 const now = () => Date.now()
 
+const LEGACY_TASK_STATUS_ALIASES: Record<string, string> = {
+  needs_review: "needs_guidance",
+}
+
+function canonicalTaskStatus(status: string): string {
+  return LEGACY_TASK_STATUS_ALIASES[status] || status
+}
+
+function taskStatusFilterValues(status: string): string[] {
+  const canonical = canonicalTaskStatus(status)
+  return canonical === "needs_guidance" ? ["needs_guidance", "needs_review"] : [canonical]
+}
+
+function normalizeTaskRow(task: Record<string, unknown>) {
+  return {
+    ...task,
+    status: canonicalTaskStatus(String(task.status || "")),
+  }
+}
+
 function flag(args: string[], name: string): string | undefined {
   const i = args.indexOf(name)
   if (i === -1 || i + 1 >= args.length) return undefined
@@ -293,11 +313,12 @@ function taskList(db: Database, args: string[]) {
     params.push((plan as { id: string }).id)
   }
   if (status) {
-    q += ` AND status = ?`
-    params.push(status)
+    const statusValues = taskStatusFilterValues(status)
+    q += ` AND status IN (${statusValues.map(() => "?").join(", ")})`
+    params.push(...statusValues)
   }
   q += ` ORDER BY position`
-  json(db.query(q).all(...params))
+  json(db.query(q).all(...params).map(normalizeTaskRow))
 }
 
 function taskGet(db: Database, args: string[]) {
@@ -305,7 +326,7 @@ function taskGet(db: Database, args: string[]) {
   if (!id) die("task id is required")
   const task = db.query(`SELECT * FROM task WHERE id = ?`).get(id)
   if (!task) die(`task not found: ${id}`)
-  json(task)
+  json(normalizeTaskRow(task as Record<string, unknown>))
 }
 
 function taskUpdate(db: Database, args: string[]) {
@@ -330,7 +351,8 @@ function taskUpdate(db: Database, args: string[]) {
   if (!existing) die(`task not found: ${id}`)
   const title = flag(args, "--title") ?? existing.title
   const description = flag(args, "--description") ?? existing.description
-  const status = flag(args, "--status") || existing.status
+  const requestedStatus = flag(args, "--status")
+  const status = requestedStatus ? canonicalTaskStatus(requestedStatus) : canonicalTaskStatus(existing.status)
   const priority = parseInt(flag(args, "--priority") || String(existing.priority), 10)
   const dependsOn = flag(args, "--depends-on") ?? existing.depends_on
   const assignee = flag(args, "--assignee") ?? existing.assignee
@@ -385,16 +407,23 @@ function summary(db: Database, args: string[]) {
     assignee: string
     worktree_dir: string
   }>
+  const normalizedTasks = tasks.map((task) => normalizeTaskRow(task)) as Array<{
+    status: string
+    id: string
+    title: string
+    assignee: string
+    worktree_dir: string
+  }>
   const counts: Record<string, number> = {}
-  for (const t of tasks) counts[t.status] = (counts[t.status] || 0) + 1
-  const total = tasks.length
+  for (const t of normalizedTasks) counts[t.status] = (counts[t.status] || 0) + 1
+  const total = normalizedTasks.length
   const done = counts["completed"] || 0
-  const needsReview = counts["needs_review"] || 0
+  const needsGuidance = counts["needs_guidance"] || 0
   const progress = total > 0 ? Math.round((done / total) * 100) : 0
   json({
     plan: { id: plan.id, name: plan.name, title: plan.title, status: plan.status, description: plan.description, spec: plan.spec, document: plan.document },
-    progress: { total, completed: done, needs_review: needsReview, percentage: progress, by_status: counts },
-    tasks: tasks.map((t) => ({
+    progress: { total, completed: done, needs_guidance: needsGuidance, percentage: progress, by_status: counts },
+    tasks: normalizedTasks.map((t) => ({
       id: t.id,
       title: t.title,
       status: t.status,

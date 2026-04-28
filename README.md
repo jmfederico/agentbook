@@ -246,6 +246,8 @@ agentbook task update <task-id> --status in_progress --assignee worker --session
 agentbook task update <task-id> --status completed --notes "Implemented and tested"
 ```
 
+For repeated review/checkpoint follow-ups, prefer numbered pass names like `Review pass 1`, `Review pass 2`, with matching session labels such as `review-pass-1` and `review-pass-2`.
+
 ### Summary, UI, and init
 
 ```bash
@@ -280,8 +282,8 @@ Task statuses:
 - `pending`
 - `in_progress`
 - `completed`
-- `blocked`
-- `needs_review`
+- `blocked` — waiting on an external dependency, permission, or input outside the worker's control
+- `needs_guidance` — worker made progress or hit an underspecified task and needs coordinator judgment, clarification, or a checkpoint. Legacy `needs_review` records still normalize to this status during the transition.
 - `cancelled`
 
 Dependencies are stored via `--depends-on` as a comma-separated list of task IDs. `plan get` returns the plan body only (including `spec` and `document`); use `task list` or `summary` to view tasks.

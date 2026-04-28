@@ -46,12 +46,20 @@ const STREAM_POLL_MS = 3_000
 const STREAM_KEEPALIVE_MS = 15_000
 const TWO_DAYS_MS = 2 * 24 * 60 * 60 * 1000
 
+const LEGACY_TASK_STATUS_ALIASES: Record<string, string> = {
+  needs_review: "needs_guidance",
+}
+
+function canonicalTaskStatus(status: string): string {
+  return LEGACY_TASK_STATUS_ALIASES[status] || status
+}
+
 const TASK_ICONS: Record<string, string> = {
   pending: "⏳",
   in_progress: "🔄",
   completed: "✅",
   blocked: "🚫",
-  needs_review: "🟣",
+  needs_guidance: "🟣",
   cancelled: "❌",
 }
 
@@ -60,6 +68,7 @@ const TASK_STATUS_COLUMNS = [
   { key: "in_progress", label: "In Progress" },
   { key: "completed", label: "Completed" },
   { key: "blocked", label: "Blocked" },
+  { key: "needs_guidance", label: "Needs Guidance" },
   { key: "cancelled", label: "Cancelled" },
 ] as const
 
@@ -268,7 +277,7 @@ const APP_CSS = String.raw`
     .badge.status-paused { background: rgba(234, 179, 8, 0.18); color: #fde68a; }
     .badge.status-cancelled { background: rgba(239, 68, 68, 0.18); color: #fecaca; }
     .badge.status-blocked { background: rgba(249, 115, 22, 0.18); color: #fed7aa; }
-    .badge.status-needs_review { background: rgba(233, 69, 96, 0.18); color: #fda4af; }
+    .badge.status-needs_guidance { background: rgba(233, 69, 96, 0.18); color: #fda4af; }
     .badge.action { background: rgba(233, 69, 96, 0.16); color: #fda4af; }
 
     .label-empty {
@@ -894,7 +903,7 @@ function loadProjectDetails(projectId: string): ProjectDetails {
           id: task.id,
           title: task.title,
           description: task.description ?? "",
-          status: task.status,
+          status: canonicalTaskStatus(task.status),
           priority: task.priority ?? 0,
           assignee: task.assignee ?? "",
           session_id: task.session_id ?? "",
@@ -957,7 +966,8 @@ function humanizeStatus(status: string): string {
 }
 
 function statusBadge(status: string, label?: string): string {
-  return `<span class="badge status-${escapeHtml(status)}">${escapeHtml(label ?? humanizeStatus(status))}</span>`
+  const normalized = canonicalTaskStatus(status)
+  return `<span class="badge status-${escapeHtml(normalized)}">${escapeHtml(label ?? humanizeStatus(normalized))}</span>`
 }
 
 function statusSortPriority(status: string): number {
@@ -1177,17 +1187,18 @@ function planShouldStartOpen(status: string): boolean {
 }
 
 function taskColumnKey(status: string): (typeof TASK_STATUS_COLUMNS)[number]["key"] {
-  if (TASK_STATUS_COLUMNS.some((column) => column.key === status)) {
-    return status as (typeof TASK_STATUS_COLUMNS)[number]["key"]
+  const normalized = canonicalTaskStatus(status)
+  if (TASK_STATUS_COLUMNS.some((column) => column.key === normalized)) {
+    return normalized as (typeof TASK_STATUS_COLUMNS)[number]["key"]
   }
 
-  if (status === "needs_review") return "blocked"
   return "pending"
 }
 
 function renderTaskCard(task: TaskDetails): string {
   const description = String(task.description || "")
   const hasDescription = Boolean(description.trim())
+  const status = canonicalTaskStatus(task.status || "pending")
   const metadata = [
     task.assignee ? `@${escapeHtml(task.assignee)}` : "Unassigned",
     `Updated ${escapeHtml(formatRelative(task.updated_at || task.created_at))}`,
@@ -1196,10 +1207,10 @@ function renderTaskCard(task: TaskDetails): string {
   return `
     <article class="task-card">
       <div class="task-title-line">
-        <span class="task-icon">${escapeHtml(TASK_ICONS[task.status] ?? "•")}</span>
+        <span class="task-icon">${escapeHtml(TASK_ICONS[status] ?? "•")}</span>
         <div>
           <div class="task-title">${escapeHtml(task.title || "Untitled task")}</div>
-          <div class="meta" style="margin-top: 6px;">${statusBadge(task.status || "pending")}</div>
+          <div class="meta" style="margin-top: 6px;">${statusBadge(status)}</div>
         </div>
       </div>
       ${

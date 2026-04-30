@@ -14,6 +14,7 @@ This skill documents the **tracked plan/task workflow** built around the `agentb
 - Use it when creating, updating, resuming, or executing tracked plan work.
 - It does **not** mean every helper-agent run in this repository requires a plan or task.
 - Direct helper-agent override runs may exist outside this tracked workflow unless the user explicitly asks for tracked work.
+- In tracked work, the coordinator owns plan decisions and dispatch, while helper subagents are preferred for most fact-finding, comparative research, risk review, and evidence gathering.
 
 ## Database Location
 
@@ -126,6 +127,15 @@ Coordinators write or update this field with `plan update <id> --document "..."`
 
 Both fields are free-form markdown.
 
+## Role Boundaries and Task Sizing
+
+- Coordinator owns the plan, spec, document, final design calls, task boundaries, dependency order, and worker dispatch.
+- Delegate most repository fact-finding, comparative research, risk analysis, and review-style evidence gathering to scout, deep-review, or other suitable helper subagents when that will improve the decision.
+- Keep research, design decision capture, implementation, validation, and git/release operations separable; use distinct tracked tasks or helper passes when they can be completed independently.
+- Give workers single-outcome tasks with one bounded area, clear acceptance criteria, and enough design context to execute without making new architecture choices.
+- If a candidate worker task mixes discovery, architecture/design, implementation, and validation, split it before dispatch.
+- Prefer the existing coordinator/scout/deep-review/worker split for normal tracked work.
+
 ## Workflow Protocol
 
 ### Creating a Plan (Coordinator)
@@ -133,10 +143,10 @@ Both fields are free-form markdown.
 The coordinator follows a 5-phase flow:
 
 1. **Register**: `plan create --title "..." --name "..." --description "..."`
-2. **Understand**: explore the codebase to understand scope and constraints.
+2. **Understand**: gather scope and constraints, delegating most fact-finding and comparison work to helper subagents when useful.
 3. **Draft spec + approval gate**: write a spec covering goals, scope, non-goals, and acceptance criteria. Update the plan: `plan update <id> --spec "..." --status needs_spec_approval`. Present the spec to the user and wait for approval. Do not create tasks or dispatch workers yet. Revise and re-propose if the user requests changes.
-4. **On approval — activate**: once the user approves, write the architecture document, break work into tasks (`task create --plan <id> --title "..." --priority <n>`), set dependencies where needed, and mark the plan active: `plan update <id> --document "..." --status active`.
-   - For repeated review/checkpoint follow-ups, prefer ordinal pass titles like `Review pass 1`, `Review pass 2`, etc., with an optional purpose qualifier after the number.
+4. **On approval — activate**: once the user approves, write the architecture document, then break work into narrowly scoped tasks (`task create --plan <id> --title "..." --priority <n>`), separating research, design decision capture, implementation, validation, and git/release follow-ups where appropriate. Set dependencies where needed, and mark the plan active: `plan update <id> --document "..." --status active`.
+    - For repeated review/checkpoint follow-ups, prefer ordinal pass titles like `Review pass 1`, `Review pass 2`, etc., with an optional purpose qualifier after the number.
 5. **Execute automatically after approval**: keep plan ownership with the coordinator, proceed into worker dispatch without asking the user whether to start, and check progress with `summary` or `task list`.
 
 ### Dispatching Workers (Coordinator)
@@ -153,6 +163,8 @@ Dispatch prompts are **pointer-only**. Include only:
 
 Never restate task titles, descriptions, or plan context in the prompt. The worker reads those directly from the DB.
 
+Before dispatching a worker, confirm the task is implementation-sized: one outcome, one bounded area, dependency-ready, and backed by enough design context that the worker should not need to invent architecture.
+
 **Freeze rule:** while plan status is `needs_spec_approval`, do not dispatch new workers. Let any in-flight tasks finish; start nothing new until the user re-approves the spec.
 
 After approval, worker dispatch should happen automatically as part of normal coordinator execution; only pause for user input when there is a blocker, clarification request, or scope change.
@@ -166,7 +178,7 @@ After approval, worker dispatch should happen automatically as part of normal co
    - For review/checkpoint follow-ups, use a deterministic session label such as `review-pass-2` that matches the numbered task title; avoid stacking adjectives like `final final review`.
 5. Do the implementation work.
 
-   If the task is large, you are looping, or the next step would require guessing, set status to `needs_guidance` with notes summarizing progress, what you tried, and what decision is needed. If the stop is caused by an external dependency, permission, or outside input you cannot obtain locally, use `blocked` instead. Then stop and let the coordinator decide next steps.
+   If the task is large, you are looping, the next step would require guessing, or the task really needs architecture/design discovery instead of execution, set status to `needs_guidance` with notes summarizing progress, what you tried, and what decision is needed. If the stop is caused by an external dependency, permission, or outside input you cannot obtain locally, use `blocked` instead. Then stop and let the coordinator decide next steps.
 
 6. Mark complete: `task update <id> --status completed --notes "summary of what was done"`
 7. Return control. Do not continue onto another plan task in the same worker session unless explicitly re-dispatched.

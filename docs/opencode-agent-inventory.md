@@ -1,6 +1,6 @@
 # OpenCode agent inventory and vendoring decisions
 
-This document evaluates the built-in OpenCode agents against this repository's [agent and skill evaluation framework](./agent-skill-evaluation-framework.md), with a default bias toward vendoring useful upstream definitions locally.
+This document evaluates the built-in OpenCode agents against this repository's [agent and skill evaluation framework](./agent-skill-evaluation-framework.md), with a default bias toward vendoring useful upstream definitions locally when they add a clear autonomy or permission boundary.
 
 ## Built-in agent inventory
 
@@ -8,7 +8,7 @@ This document evaluates the built-in OpenCode agents against this repository's [
 | --- | --- | --- | --- | --- |
 | `build` | primary | Full-access development agent | Conflicts with the coordinator-first operating model because it encourages direct implementation from the active primary session instead of coordinator-owned planning and worker dispatch. | Do not vendor |
 | `plan` | primary | Analysis and planning without edits | Overlaps with `coordinator`, but lacks the agentbook-specific ownership boundary around plan registration, approval gates, task tracking, and dispatch. | Do not vendor |
-| `general` | subagent | General-purpose execution/research helper with broad tool access | Overlaps heavily with `worker` and is less bounded than this repo's single-task executor contract. | Do not vendor |
+| `general` | subagent | General-purpose execution/research helper with broad tool access | Overlaps heavily with `worker` and is less bounded than this repo's single-task executor contract; this repo prefers coordinator-led delegation plus `scout`/`deep-review` for research and review instead of a new default architecture helper. | Do not vendor |
 | `explore` | subagent | Fast read-only codebase exploration | Useful as a distinct read-only investigation boundary for coordinator-led research, especially when understanding a codebase before planning or implementation. | Vendor locally as `agents/scout.md` under the renamed helper `scout` |
 
 ## Selected vendored agent
@@ -26,6 +26,13 @@ This document evaluates the built-in OpenCode agents against this repository's [
   - align the wording with this repository's coordinator-owned planning model
   - make clear that direct `@scout` invocation does not require a plan/task unless the user explicitly wants tracked work
   - prefer repository search and read tools over any change-capable workflow
+
+## Role-separation decision
+
+- This repository is **not** adding a default architecture/design helper in this round.
+- Coordinator-owned decisions, task boundaries, and dispatch stay intact.
+- Delegated research, fact-finding, comparative investigation, and review-style evidence gathering should go to `scout`, `deep-review`, or other explicit helper passes as appropriate.
+- Workers should still receive narrow, single-outcome implementation tasks rather than broad design-heavy assignments.
 
 ### `deep-review` (repo-defined review helper)
 

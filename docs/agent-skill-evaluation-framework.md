@@ -24,6 +24,10 @@ When deciding whether behavior belongs in an agent, a skill, or local repo guida
 ## Repository stance
 
 - **Coordinator owns plans.** Plan creation, spec drafting, approval gates, task creation, dependency management, and dispatch sequencing belong to the coordinator.
+- **No default new architecture agent in this round.** Use the existing coordinator / scout / deep-review / worker / helper split first; only add a new role later if the documented helpers prove insufficient.
+- **Coordinator owns decisions and task boundaries.** The coordinator should capture the design choice, split work into narrow tasks, and decide when research has enough evidence to proceed.
+- **Advisory helpers provide input, not ownership.** Scout, deep-review, and other helper subagents may gather facts, compare options, surface risks, and propose design considerations, but they do not own the plan/task lifecycle.
+- **Workers execute bounded tasks.** A worker should receive one clear outcome at a time, with acceptance criteria that fit a single implementation or validation pass.
 - **Workers do not self-direct plan work.** A worker executes the assigned task, verifies the result, updates task status, and stops. If progress stalls because the task is underspecified or needs a judgment call, the worker should checkpoint with `needs_guidance`; if the stop is external, it should use `blocked`. Legacy `needs_review` records still normalize to the new status during the transition.
 - **Direct helper override is allowed.** If a human explicitly mentions a helper agent such as `worker` or `scout`, that mention can be treated as a request for direct bounded helper execution without requiring a plan or task.
 - **Override mode does not transfer plan ownership.** Even when a helper agent is invoked directly, tracked plans, spec revisions, and orchestration remain coordinator-owned unless the user explicitly asks for tracked work.
@@ -49,10 +53,23 @@ Skills may support planning with reusable checklists or database workflows, but 
 
 Codebase exploration is usually **not a separate long-lived role by default**.
 
-- Keep it as a **skill-backed activity** when exploration is part of understanding work before planning or implementation.
+- Keep it as a **skill-backed activity** or an advisory helper pass when exploration is part of understanding work before planning or implementation.
+- Delegate most fact-finding, comparative research, and risk analysis to an advisory helper first.
 - Introduce a dedicated **agent** only if exploration needs a different model, permission profile, or a strongly isolated research role with different stop conditions.
 
 The default bias is to avoid creating a new agent just because a task includes investigation.
+
+### Practical split guidance
+
+When work spans multiple phases, split it before dispatching a worker:
+
+- **Research / evidence gathering** → advisory helper or skill-backed exploration
+- **Design decision capture** → coordinator records the outcome and rationale
+- **Implementation** → worker receives a single bounded change
+- **Validation** → separate worker pass when it materially differs from implementation
+- **Git / release operations** → separate pass when they add meaningful coordination or risk
+
+If a task mixes these phases and cannot be reduced to one clear outcome, it is too broad for a worker task as written.
 
 ### Execution
 

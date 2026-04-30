@@ -133,11 +133,18 @@ Once the user approves the spec:
 
 Before dispatching any worker, confirm the task is truly ready:
 
-- The problem statement is specific enough to implement without guessing.
-- Relevant files/components are identified.
-- Dependencies are completed.
-- If the request began as symptoms only, triage has already established a bounded target.
+### Pre-dispatch readiness rubric
+
+- The task has **one clear outcome** and can be completed without the worker also deciding architecture, splitting scope, or running unrelated follow-up work.
+- The worker's scope is **bounded** to specific files, components, or a narrow subsystem that can be named up front.
+- The problem statement is specific enough to implement without guessing, and any design context the worker needs is already captured in the plan document or task record.
+- Any required fact-finding, comparison, or risk analysis has been delegated to an appropriate helper when useful, instead of being bundled into the worker task.
+- Dependencies are completed, or the task is explicitly blocked on them and should not be dispatched yet.
+- If the request began as symptoms only, triage has already established a bounded target and the task reflects that narrowed scope.
+- The success criteria are concrete and testable, so the worker can tell when the task is done.
 - The worker prompt can stay pointer-only; any needed context belongs in the plan/task records, not in the prompt itself.
+
+If any of those checks fail, split the work, add the missing design context, or delegate more research before dispatching the worker.
 
 ## Phase 5: Report
 

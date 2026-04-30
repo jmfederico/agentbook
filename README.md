@@ -9,13 +9,14 @@ Cross-session plan tracking for AI agents, backed by SQLite.
 - Shared plan and task tracking across sessions and git worktrees
 - Simple CLI for plans, tasks, summaries, initialization, and a local dashboard UI
 - Plan documents that act as durable handoff context between agents
-- Agent-oriented workflow with coordinator and worker roles
+- Agent-oriented workflow with coordinator-owned decisions, narrow worker tasks, and delegated research/review helpers
 - Automatic database migration from legacy `.opencode/agentbook.db` when needed
 
 ## TL;DR — how to use the agents
 
 - Select `coordinator` as your active agent (set it as your default or switch to it in opencode) — it plans and keeps track of your work across sessions and worktrees. Do not just `@coordinator` from another agent; actually talk to `coordinator` as your active agent.
 - The coordinator drafts a `spec` (the "what") and asks you to approve it before breaking work into tasks. Once you approve, it creates tasks and dispatches workers.
+- For bigger questions, the coordinator should usually delegate fact-finding and research to `scout` or `deep-review` rather than trying to carry broad investigation inside the active session.
 - Your normal human role is to provide goals, approve or revise specs when scope changes, and review results — not to manually babysit every implementation step.
 - Keep `coordinator` as your active agent for normal use. Direct `@worker`, `@scout`, or `@deep-review` mentions are supported as an explicit helper-agent override path, but they are still exceptional/manual usage rather than the default workflow.
 
@@ -64,7 +65,7 @@ Also add the bundled tmp-folder instruction to your global opencode config so ag
 }
 ```
 
-`scout` is a vendored, read-only investigation helper for coordinator-led research. It can use bounded bash commands for read-only git and configured remote-provider inspection, limited to GET/read-only provider checks and non-mutating shell use, but it must never mutate files or repo state, including checkout/reset/clean/switch/merge/rebase/push/fetch/pull, redirects, write-producing pipes, or env/config changes.
+`scout` is a vendored, read-only investigation helper for coordinator-led research and delegated fact-finding. It can use bounded bash commands for read-only git and configured remote-provider inspection, limited to GET/read-only provider checks and non-mutating shell use, but it must never mutate files or repo state, including checkout/reset/clean/switch/merge/rebase/push/fetch/pull, redirects, write-producing pipes, or env/config changes.
 
 `deep-review` is a read-only review helper for slower, higher-scrutiny code review passes. It can also use bounded bash commands for read-only git and configured remote-provider inspection, limited to GET/read-only provider checks and non-mutating shell use, but it must never mutate files or repo state, including checkout/reset/clean/switch/merge/rebase/push/fetch/pull, redirects, write-producing pipes, or env/config changes. Use it when you want a stronger critique boundary than the default exploration helper.
 
@@ -187,13 +188,15 @@ agentbook summary oauth2-auth
 
 This repository defaults to a **coordinator-owned planning model** for tracked work:
 
-- `coordinator` owns plans, specs, approval gates, task creation, dependency checks, and dispatch sequencing.
+- `coordinator` owns plans, specs, approval gates, task creation, dependency checks, dispatch sequencing, and final design/task-boundary decisions.
 - `worker` is a general-purpose executor that completes one assigned task, verifies the result, updates task status, and stops.
-- `scout` is a vendored helper for read-only codebase investigation when a parent agent wants a tighter research boundary. It may use bash for read-only git and configured remote-provider inspection only, with GET/read-only provider checks and no mutating shell features such as checkout/reset/clean/switch/merge/rebase/push/fetch/pull, redirects, or write-producing pipes.
-- `deep-review` is a read-only helper for thorough review passes and higher-confidence critique. It may also use bash for read-only git and configured remote-provider inspection only, with GET/read-only provider checks and no mutating shell features such as checkout/reset/clean/switch/merge/rebase/push/fetch/pull, redirects, or write-producing pipes.
+- `scout` is a vendored helper for delegated codebase investigation and fact-finding. It may use bash for read-only git and configured remote-provider inspection only, with GET/read-only provider checks and no mutating shell features such as checkout/reset/clean/switch/merge/rebase/push/fetch/pull, redirects, or write-producing pipes.
+- `deep-review` is a read-only helper for thorough review passes, higher-confidence critique, and design-risk checking. It may also use bash for read-only git and configured remote-provider inspection only, with GET/read-only provider checks and no mutating shell features such as checkout/reset/clean/switch/merge/rebase/push/fetch/pull, redirects, or write-producing pipes.
 - `skills` hold reusable procedures and operational knowledge that multiple agents can load.
 
 Direct helper-agent override runs are also supported when a human explicitly mentions a helper agent. That override path is intentionally separate from tracked plan execution: it bypasses plan/task requirements unless the user explicitly requests tracked work, and it does not change coordinator ownership of plans.
+
+This repository does **not** introduce a default architecture/design helper in this round; the preferred split is coordinator-owned decisions informed by delegated research and review output, then narrowed into worker-sized tasks.
 
 Use this rule of thumb when deciding where behavior belongs:
 
@@ -203,9 +206,9 @@ Use this rule of thumb when deciding where behavior belongs:
 
 Specific responsibilities are evaluated as follows:
 
-- **Planning** belongs to `coordinator` rather than a worker or shared skill.
-- **Codebase exploration** should usually be a skill-backed activity inside an existing role, not a separate long-lived agent by default.
-- **Execution** belongs to `worker`, with specialized implementation guidance loaded through skills as needed.
+- **Planning and design decisions** belong to `coordinator` rather than a worker or shared skill.
+- **Codebase exploration, comparative research, and fact-finding** should usually be delegated to `scout` or `deep-review` instead of being bundled into implementation tasks.
+- **Execution** belongs to `worker`, with specialized implementation guidance loaded through skills as needed and with narrow, single-outcome task scopes.
 
 When useful opencode agent definitions exist elsewhere, this repo has a default bias toward **vendoring them locally** so their behavior can be reviewed, adapted, and maintained alongside the rest of the workflow.
 

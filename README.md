@@ -193,6 +193,8 @@ This repository defaults to a **coordinator-owned planning model** for tracked w
 - `scout` is a vendored helper for delegated codebase investigation and fact-finding. It may use bash for read-only git and configured remote-provider inspection only, with GET/read-only provider checks and no mutating shell features such as checkout/reset/clean/switch/merge/rebase/push/fetch/pull, redirects, or write-producing pipes.
 - `deep-review` is a read-only helper for thorough review passes, higher-confidence critique, and design-risk checking. It may also use bash for read-only git and configured remote-provider inspection only, with GET/read-only provider checks and no mutating shell features such as checkout/reset/clean/switch/merge/rebase/push/fetch/pull, redirects, or write-producing pipes.
 - `skills` hold reusable procedures and operational knowledge that multiple agents can load.
+- For multi-component work, the coordinator should record the shared contract/interface or data shape before implementation when practical, then split worker tasks by one bounded component responsibility at a time.
+- If a contract is already stable, independent component tasks can run in parallel; if a later task must discover or establish the contract, sequence that earlier task first and split the dependent implementation afterward.
 
 Direct helper-agent override runs are also supported when a human explicitly mentions a helper agent. That override path is intentionally separate from tracked plan execution: it bypasses plan/task requirements unless the user explicitly requests tracked work, and it does not change coordinator ownership of plans.
 
@@ -209,6 +211,7 @@ Specific responsibilities are evaluated as follows:
 - **Planning and design decisions** belong to `coordinator` rather than a worker or shared skill.
 - **Codebase exploration, comparative research, and fact-finding** should usually be delegated to `scout` or `deep-review` instead of being bundled into implementation tasks.
 - **Execution** belongs to `worker`, with specialized implementation guidance loaded through skills as needed and with narrow, single-outcome task scopes.
+- **Component-boundary tasks** should usually target one bounded responsibility at a time; define shared contracts/interfaces first when that makes parallel implementation safe, or sequence the contract-producing task before dependent work when it does not.
 
 When useful opencode agent definitions exist elsewhere, this repo has a default bias toward **vendoring them locally** so their behavior can be reviewed, adapted, and maintained alongside the rest of the workflow.
 

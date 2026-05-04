@@ -138,6 +138,14 @@ Both fields are free-form markdown.
 - If a candidate worker task mixes discovery, architecture/design, implementation, and validation, split it before dispatch.
 - Prefer the existing coordinator/scout/deep-review/worker split for normal tracked work.
 
+### Component-boundary planning
+
+- When a change spans multiple components, identify each bounded responsibility before dispatch.
+- Capture shared contracts, interfaces, data shapes, or protocol expectations when that is practical and will reduce guesswork.
+- Split implementation into tasks that each own one bounded component responsibility when possible.
+- If one task must establish a contract for another, use dependencies so the contract-producing task runs first.
+- Keep cross-component integration and validation as a separate follow-up when they add new coordination work beyond a single component.
+
 ## Workflow Protocol
 
 ### Creating a Plan (Coordinator)
@@ -149,6 +157,7 @@ The coordinator follows a 5-phase flow:
 3. **Draft spec + approval gate**: write a spec covering goals, scope, non-goals, and acceptance criteria. Update the plan: `plan update <id> --spec "..." --status needs_spec_approval`. Present the spec to the user and wait for approval. Do not create tasks or dispatch workers yet. Revise and re-propose if the user requests changes.
 4. **On approval — activate**: once the user approves, write the architecture document, then break work into narrowly scoped tasks (`task create --plan <id> --title "..." --priority <n>`), separating research, design decision capture, implementation, validation, and git/release follow-ups where appropriate. Set dependencies where needed, and mark the plan active: `plan update <id> --document "..." --status active`.
     - For repeated review/checkpoint follow-ups, prefer ordinal pass titles like `Review pass 1`, `Review pass 2`, etc., with an optional purpose qualifier after the number.
+    - For multi-component changes, record the component boundaries and any shared contracts before dispatch so workers can stay within one responsibility each.
 5. **Execute automatically after approval**: keep plan ownership with the coordinator, proceed into worker dispatch without asking the user whether to start, and check progress with `summary` or `task list`.
 
 ### Dispatching Workers (Coordinator)
@@ -166,6 +175,8 @@ Dispatch prompts are **pointer-only**. Include only:
 Never restate task titles, descriptions, or plan context in the prompt. The worker reads those directly from the DB.
 
 Before dispatching a worker, confirm the task is implementation-sized: one outcome, one bounded area, dependency-ready, and backed by enough design context that the worker should not need to invent architecture.
+
+If the task crosses component boundaries, confirm either that the shared contract is already recorded or that the task is intentionally the first contract-setting step. Otherwise split the work further.
 
 **Freeze rule:** while plan status is `needs_spec_approval`, do not dispatch new workers. Let any in-flight tasks finish; start nothing new until the user re-approves the spec.
 

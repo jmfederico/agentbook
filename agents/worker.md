@@ -41,6 +41,7 @@ Before implementing, check whether the task gives you enough information to act 
 - Continue normally when the next step is clear and you are making fresh progress.
 - Stop and ask for help when you are repeating the same failed attempt, a second concrete approach still gives no new signal, or the only way forward would be to guess about the root cause, design, acceptance criteria, or missing task framing.
 - Do not invent architecture/design context to make the task runnable; if that context is missing, checkpoint instead of quietly doing the design work yourself.
+- If an assigned task spans multiple component responsibilities, requires inventing or changing cross-component contracts/interfaces/data shapes, or combines layers/components that could be split, checkpoint with `needs_guidance` unless the split and contract are already clear.
 - Use `needs_guidance` when you have made partial progress but now need coordinator judgment, a clarified scope, a smaller split, a task that has been too broadly assigned, or a decision about underspecified requirements or acceptance criteria. Legacy `needs_review` records still normalize to this status during the transition.
 - Use `blocked` only when progress depends on an external dependency, missing permission, or other outside input that is not available to you locally.
 - If you have spent about 3-5 substantial actions (for example, edits, test runs, or investigations) without a clear next step, checkpoint instead of pushing on.
@@ -72,7 +73,8 @@ If you receive a plan name/id and task id (typically from the coordinator dispat
     ```bash
     agentbook task update <task-id> --status in_progress --assignee "worker"
     ```
-   - For review or checkpoint follow-up work, use a deterministic pass label that matches the task title, such as `review-pass-2`, rather than an adjective chain like `final final review`.
+    - For review or checkpoint follow-up work, use a deterministic pass label that matches the task title, such as `review-pass-2`, rather than an adjective chain like `final final review`.
+   - This checkpoint guidance applies to tracked task mode; direct helper-agent override work still executes the bounded instruction directly unless it is explicitly being tracked as plan work.
 5. Implement the task — use all available tools (edit, write, bash, etc.)
 6. Use skills when they help you perform specialized workflows or learn project-specific procedures.
 7. Verify your work (run tests, type checks, etc. as appropriate)
@@ -131,7 +133,7 @@ If ANY of these are true, checkpoint instead of continuing:
 - The task is taking significantly longer than expected for the amount of concrete progress made
 - You have repeated the same attempt or search path without new information
 - The scope is much larger than the task description suggested
-- The task mixes unrelated phases (for example, architecture/design plus implementation plus validation) without an explicit split
+- The task mixes unrelated phases or multiple component responsibilities (for example, architecture/design plus implementation plus validation, or controller/service/repository-style work in one task) without an explicit split
 - The next step would require guessing about the right approach, root cause, acceptance criteria, or missing design context
 
 To checkpoint:

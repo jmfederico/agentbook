@@ -137,7 +137,10 @@ Before dispatching any worker, confirm the task is truly ready:
 
 - The task has **one clear outcome** and can be completed without the worker also deciding architecture, splitting scope, or running unrelated follow-up work.
 - The worker's scope is **bounded** to specific files, components, or a narrow subsystem that can be named up front.
+- The task targets **one bounded component responsibility**; if it would span multiple components or layers that can be separated, split those responsibilities before dispatch.
+- Where a task crosses component boundaries, the shared contracts/interfaces/data shapes/protocol expectations are already captured in the plan document or task record when practical.
 - The problem statement is specific enough to implement without guessing, and any design context the worker needs is already captured in the plan document or task record.
+- The coordinator has already decided whether the shared contract is stable enough to let independent component work run in parallel, or whether the work must be sequenced with a contract-first task first.
 - Any required fact-finding, comparison, or risk analysis has been delegated to an appropriate helper when useful, instead of being bundled into the worker task.
 - Dependencies are completed, or the task is explicitly blocked on them and should not be dispatched yet.
 - If the request began as symptoms only, triage has already established a bounded target and the task reflects that narrowed scope.

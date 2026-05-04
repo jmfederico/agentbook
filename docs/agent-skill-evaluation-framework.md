@@ -65,11 +65,26 @@ When work spans multiple phases, split it before dispatching a worker:
 
 - **Research / evidence gathering** → advisory helper or skill-backed exploration
 - **Design decision capture** → coordinator records the outcome and rationale
+- **Component-boundary planning** → define the shared contract/interface/data shape before implementation when practical, then split by one bounded component responsibility
 - **Implementation** → worker receives a single bounded change
 - **Validation** → separate worker pass when it materially differs from implementation
 - **Git / release operations** → separate pass when they add meaningful coordination or risk
 
 If a task mixes these phases and cannot be reduced to one clear outcome, it is too broad for a worker task as written.
+
+### Component-boundary sequencing
+
+Use architecture-agnostic contract-first sequencing when it helps split work safely:
+
+- If two component tasks can share a stable contract, record that contract first and let the component implementations proceed in parallel.
+- If one component must discover the contract before the others can implement against it, make that contract-producing task first, then dispatch the dependent tasks.
+- Keep each worker task focused on one bounded responsibility rather than combining multiple components that could be split cleanly.
+
+Examples:
+
+- One task defines the shared data shape or interface, then separate tasks implement the dependent components against it.
+- One task discovers an external protocol or file format, then a follow-up task adapts the rest of the work to that contract.
+- One task validates the contract in isolation, while another task implements the independent component that consumes it.
 
 ### Execution
 

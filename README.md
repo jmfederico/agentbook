@@ -55,12 +55,13 @@ ln -s "$REPO_PATH/agents/scout.md" ~/.config/opencode/agents/scout.md
 ln -s "$REPO_PATH/agents/deep-review.md" ~/.config/opencode/agents/deep-review.md
 ```
 
-Also add the bundled tmp-folder instruction to your global opencode config so agents consistently use `/tmp/opencode/` for scratch files:
+Also add the bundled tmp-folder and calibrated-assertions instructions to your global opencode config so agents consistently use `/tmp/opencode/` for scratch files and keep strong claims scoped:
 
 ```jsonc
 {
   "instructions": [
-    "/path/to/agentbook/instructions/tmp-folder.md"
+    "/path/to/agentbook/instructions/tmp-folder.md",
+    "/path/to/agentbook/instructions/calibrated-assertions.md"
   ]
 }
 ```
@@ -117,7 +118,7 @@ Optional per-agent model overrides (choose whatever models fit your local setup)
 
 This repository leaves model choice to you; use the settings above as a local configuration template rather than a recommendation.
 
-Recommended permissions after adding `instructions/tmp-folder.md` to `instructions`:
+Recommended permissions after adding the bundled instructions above to `instructions`:
 
 ```jsonc
 {

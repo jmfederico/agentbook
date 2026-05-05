@@ -245,6 +245,32 @@ describe("needs_spec_approval status", () => {
   })
 })
 
+describe("discovery status", () => {
+  const tmp = freshTmpDir()
+  const db = `${tmp}/discovery.db`
+
+  it("round-trips through discovery and is listed by status", () => {
+    const created = mkPlan(db, "Discovery Plan")
+    const id = created.id as string
+
+    const r1 = runCli(["plan", "update", id, "--status", "discovery"], { dbPath: db })
+    expect(r1.exitCode).toBe(0)
+    expect(json<Record<string, unknown>>(r1.stdout).status).toBe("discovery")
+    expect(getPlan(db, id).status).toBe("discovery")
+
+    const listR = runCli(["plan", "list", "--status", "discovery"], { dbPath: db })
+    expect(listR.exitCode).toBe(0)
+    const plans = json<Array<Record<string, unknown>>>(listR.stdout)
+    expect(plans.some((p) => p.id === id)).toBe(true)
+  })
+
+  it("top-level help lists discovery in plan statuses", () => {
+    const help = runCli(["--help"], { dbPath: db })
+    expect(help.exitCode).toBe(0)
+    expect(help.stdout).toContain("Plan statuses: draft | discovery | needs_spec_approval | active | paused | completed | cancelled | archived")
+  })
+})
+
 // ─── Task CRUD ────────────────────────────────────────────────────────────────
 
 describe("Task CRUD", () => {

@@ -75,6 +75,7 @@ const TASK_STATUS_COLUMNS = [
 const PLAN_STATUS_COLUMNS = [
   { key: "active", label: "Active" },
   { key: "draft", label: "Draft" },
+  { key: "discovery", label: "Discovery" },
   { key: "paused", label: "Paused" },
   { key: "completed", label: "Completed" },
   { key: "cancelled", label: "Cancelled" },
@@ -281,6 +282,7 @@ const APP_CSS = String.raw`
     .badge.status-active,
     .badge.status-in_progress { background: rgba(59, 130, 246, 0.18); color: #bfdbfe; }
     .badge.status-draft,
+    .badge.status-discovery,
     .badge.status-pending { background: rgba(107, 114, 128, 0.2); color: #d1d5db; }
     .badge.status-completed { background: rgba(34, 197, 94, 0.18); color: #bbf7d0; }
     .badge.status-paused { background: rgba(234, 179, 8, 0.18); color: #fde68a; }
@@ -1762,7 +1764,7 @@ function statusBadge(status: string, label?: string): string {
 }
 
 function statusSortPriority(status: string): number {
-  if (["active", "draft", "paused"].includes(status)) return 0
+  if (["active", "draft", "discovery", "paused"].includes(status)) return 0
   if (status === "completed") return 1
   if (status === "cancelled") return 2
   return 3

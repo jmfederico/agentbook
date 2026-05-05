@@ -57,7 +57,8 @@ agentbook plan create --title "Feature: ..." --name "short-user-facing-name" --d
 - For symptom-only bug/error reports, investigation is mandatory unless the issue is already clearly localized and low risk.
 - Use `scout` to answer concrete factual questions about the repository, likely impact area, and relevant files.
 - Use `deep-review` when you need higher-confidence judgment on correctness, risk, edge cases, or whether a narrow fix is safe.
-- Before drafting a spec for non-trivial work, develop the solution interactively: frame the problem, identify affected modules or subsystems, compare solution directions and trade-offs, agree on testing expectations, decide whether repository documentation is needed, and define what is out of scope.
+- Treat `draft` as the placeholder state and `discovery` as the active requirements and solution-shaping phase.
+- Keep the plan in `discovery` while you develop the solution interactively: frame the problem, identify affected modules or subsystems, compare solution directions and trade-offs, agree on testing expectations, decide whether repository documentation is needed, and define what is out of scope.
 - If the user has not specified testing, propose a concrete strategy and invite correction rather than treating testing as optional.
 - Keep truly trivial or clearly localized work lightweight.
 - Use the question tool to clarify ambiguities — do not make assumptions.
@@ -66,7 +67,8 @@ agentbook plan create --title "Feature: ..." --name "short-user-facing-name" --d
 
 - Synthesize findings from exploration.
 - Launch a general subagent if needed to think through requirements and trade-offs.
-- Draft the spec: a concise, user-readable statement of the agreed outcome of discovery/design — goals, scope (in/out), acceptance criteria, solution direction, trade-offs, testing expectations, documentation decisions, and out-of-scope boundaries. This is user-owned; write it to be read and approved by the user, not by future agents.
+- Draft the spec from a completed discovery pass: a concise, user-readable statement of the agreed outcome of discovery/design — goals, scope (in/out), acceptance criteria, solution direction, trade-offs, testing expectations, documentation decisions, and out-of-scope boundaries. This is user-owned; write it to be read and approved by the user, not by future agents.
+- Only leave `discovery` when both the coordinator and the user agree the framing is ready to formalize. The transition gate should be met on problem framing, scope/non-scope, solution direction, trade-offs and risks, testing expectations, and human agreement that the understanding is ready for spec approval.
 - Persist the draft and signal that approval is needed:
   ```bash
   agentbook plan update <plan-id> --spec "..." --status needs_spec_approval

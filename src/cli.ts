@@ -472,7 +472,8 @@ Commands:
 Environment:
   AGENTBOOK_DB   Path to SQLite database (default: $GIT_COMMON_DIR/agentbook/agentbook.db or .opencode/agentbook.db)
 
-Plan statuses: draft | needs_spec_approval | active | paused | completed | cancelled | archived
+Plan statuses: draft | discovery | needs_spec_approval | active | paused | completed | cancelled | archived
+  discovery: coordinator and human are actively shaping the plan before spec approval.
   needs_spec_approval: coordinator has drafted or revised the spec; awaiting user approval before dispatching new workers.`)
   process.exit(0)
 }

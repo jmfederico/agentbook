@@ -12,5 +12,6 @@ describe("bun-in-bun smoke check", () => {
     const result = runCli(["--help"], { dbPath: `${tmp}/smoke.db` })
     expect(result.exitCode).toBe(0)
     expect(result.stdout).toContain("agentbook")
+    expect(result.stdout).toContain("discovery")
   })
 })

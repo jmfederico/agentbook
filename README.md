@@ -142,7 +142,7 @@ Recommended default flow for tracked work:
 
 1. Talk to `coordinator` as your active agent.
 2. Describe the outcome you want.
-3. Review and approve the drafted `spec` after the discovery/design conversation.
+3. Review and approve the drafted `spec` after the discovery/design conversation, once the plan has moved through the active `discovery` phase and is ready for spec approval.
 4. Let the coordinator dispatch workers for bounded tasks.
 5. Come back later and ask the coordinator to resume the plan or report progress.
 
@@ -152,7 +152,7 @@ Ask the coordinator to create a plan:
 Add OAuth2 authentication to the API
 ```
 
-The coordinator will first guide requirements discovery and solution design, then draft a `spec` (the agreed outcome) and ask for your approval before breaking work into tasks. Once you approve, it moves straight into task creation and worker dispatch without asking for an extra go-ahead.
+The coordinator will first guide requirements discovery and solution design, keep the plan in `discovery` while the work is being shaped, then draft a `spec` (the agreed outcome) and ask for your approval before breaking work into tasks. Once you approve, it moves straight into task creation and worker dispatch without asking for an extra go-ahead.
 
 ### Tracked work vs direct helper-agent override
 
@@ -189,7 +189,7 @@ agentbook summary oauth2-auth
 
 This repository defaults to a **coordinator-owned planning model** for tracked work:
 
-- `coordinator` owns plans, discovery/design checkpoints, specs, approval gates, task creation, dependency checks, dispatch sequencing, and final design/task-boundary decisions.
+- `coordinator` owns plans, the `draft` and `discovery` phases, discovery/design checkpoints, specs, approval gates, task creation, dependency checks, dispatch sequencing, and final design/task-boundary decisions.
 - `worker` is a general-purpose executor that completes one assigned task, verifies the result, updates task status, and stops.
 - `scout` is a vendored helper for delegated codebase investigation and fact-finding. It may use bash for read-only git and configured remote-provider inspection only, with GET/read-only provider checks and no mutating shell features such as checkout/reset/clean/switch/merge/rebase/push/fetch/pull, redirects, or write-producing pipes.
 - `deep-review` is a read-only helper for thorough review passes, higher-confidence critique, and design-risk checking. It may also use bash for read-only git and configured remote-provider inspection only, with GET/read-only provider checks and no mutating shell features such as checkout/reset/clean/switch/merge/rebase/push/fetch/pull, redirects, or write-producing pipes.
@@ -234,6 +234,7 @@ agentbook <command> <subcommand> [options]
 agentbook plan create --title "Feature: OAuth2" --name "oauth2-auth" --description "Add OAuth2 authentication to the API" --spec "User requirements here" --document "Initial plan notes"
 agentbook plan list
 agentbook plan list --status active
+agentbook plan list --status discovery
 agentbook plan list --status needs_spec_approval
 agentbook plan get oauth2-auth
 agentbook plan archive oauth2-auth
@@ -277,6 +278,7 @@ Plans include an `id`, user-facing `name`, `title`, `description`, `status`, a `
 Plan statuses:
 
 - `draft`
+- `discovery` — active requirements discovery and solution shaping; the coordinator stays here until the understanding is ready for spec approval
 - `needs_spec_approval` — coordinator has drafted or revised the spec; waiting for user approval. No new workers are dispatched in this state.
 - `active`
 - `paused`

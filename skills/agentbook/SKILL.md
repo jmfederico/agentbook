@@ -64,7 +64,7 @@ Plan JSON includes both a stable UUID `id` and a user-facing `name`; prefer `nam
 ### Plan statuses
 
 - `draft`
-- `discovery` — active requirements discovery and solution shaping; keep the plan here until the framing is ready for spec approval
+- `discovery` — active requirements discovery and solution shaping
 - `needs_spec_approval`
 - `active`
 - `paused`
@@ -92,8 +92,6 @@ Tasks can declare dependencies with `--depends-on` as a comma-separated list of 
 ### `spec`
 
 The `spec` field stores the stable, user-owned requirements for a plan and the agreed outcome of the discovery/design conversation: goals, scope, non-goals, acceptance criteria, solution direction, and trade-offs.
-
-Discovery is the active design/shaping phase that precedes spec approval; move to `needs_spec_approval` only when the coordinator and user are aligned on framing, scope, trade-offs, and testing expectations.
 
 ### `document`
 

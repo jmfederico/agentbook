@@ -23,9 +23,9 @@ When deciding whether behavior belongs in an agent, a skill, or local repo guida
 
 ## Repository stance
 
-- **Coordinator owns plans.** Plan creation, spec drafting, approval gates, task creation, dependency management, and dispatch sequencing belong to the coordinator.
+- **Coordinator owns plans.** Plan creation, requirements discovery and solution design, spec drafting, approval gates, task creation, dependency management, and dispatch sequencing belong to the coordinator.
 - **No default new architecture agent in this round.** Use the existing coordinator / scout / deep-review / worker / helper split first; only add a new role later if the documented helpers prove insufficient.
-- **Coordinator owns decisions and task boundaries.** The coordinator should capture the design choice, split work into narrow tasks, and decide when research has enough evidence to proceed.
+- **Coordinator owns decisions and task boundaries.** The coordinator should capture the design choice after an interactive discovery/design checkpoint, split work into narrow tasks, and decide when research has enough evidence to proceed.
 - **Advisory helpers provide input, not ownership.** Scout, deep-review, and other helper subagents may gather facts, compare options, surface risks, and propose design considerations, but they do not own the plan/task lifecycle.
 - **Workers execute bounded tasks.** A worker should receive one clear outcome at a time, with acceptance criteria that fit a single implementation or validation pass.
 - **Workers do not self-direct plan work.** A worker executes the assigned task, verifies the result, updates task status, and stops. If progress stalls because the task is underspecified or needs a judgment call, the worker should checkpoint with `needs_guidance`; if the stop is external, it should use `blocked`. Legacy `needs_review` records still normalize to the new status during the transition.
@@ -34,6 +34,7 @@ When deciding whether behavior belongs in an agent, a skill, or local repo guida
 - **Plan/task references may be contextual in override mode.** A coordinator may pass a plan or task id to a helper agent as optional context in override mode, but that alone should not cause the helper to claim or mutate tracked task state.
 - **Skills are shared operational knowledge.** They should teach procedures, commands, checklists, and domain-specific workflows without redefining ownership boundaries.
 - **README and agent definitions should agree.** If a workflow rule changes, update the repository-facing docs and role definitions together.
+- **Spec is the agreed outcome.** The spec should record the result of the discovery/design conversation rather than acting as the first design proposal.
 
 ## Responsibility evaluation
 
@@ -43,7 +44,7 @@ Planning stays with the **coordinator agent** for tracked work, not a skill and 
 
 Use an agent because planning needs:
 
-- a durable ownership boundary around specs, approval, and task orchestration
+- a durable ownership boundary around discovery/design, specs, approval, and task orchestration
 - explicit freeze behavior while a spec awaits approval
 - judgment about task decomposition, dependencies, and sequencing
 
@@ -64,7 +65,7 @@ The default bias is to avoid creating a new agent just because a task includes i
 When work spans multiple phases, split it before dispatching a worker:
 
 - **Research / evidence gathering** → advisory helper or skill-backed exploration
-- **Design decision capture** → coordinator records the outcome and rationale
+- **Design decision capture** → coordinator records the outcome of discovery/design and the rationale
 - **Component-boundary planning** → define the shared contract/interface/data shape before implementation when practical, then split by one bounded component responsibility
 - **Implementation** → worker receives a single bounded change
 - **Validation** → separate worker pass when it materially differs from implementation

@@ -2,7 +2,7 @@
 
 Cross-session plan tracking for AI agents, backed by SQLite.
 
-`agentbook` helps a human delegate multi-step work to AI agents with minimal ongoing supervision once requirements are clear. It gives coordinator and worker agents a shared SQLite-backed plan ledger that persists across sessions and git worktrees.
+`agentbook` helps a human delegate multi-step work to AI agents with minimal ongoing supervision once the requirements and solution direction are clear. It gives coordinator and worker agents a shared SQLite-backed plan ledger that persists across sessions and git worktrees.
 
 ## Features
 
@@ -15,7 +15,7 @@ Cross-session plan tracking for AI agents, backed by SQLite.
 ## TL;DR — how to use the agents
 
 - Select `coordinator` as your active agent (set it as your default or switch to it in opencode) — it plans and keeps track of your work across sessions and worktrees. Do not just `@coordinator` from another agent; actually talk to `coordinator` as your active agent.
-- The coordinator drafts a `spec` (the "what") and asks you to approve it before breaking work into tasks. Once you approve, it creates tasks and dispatches workers.
+- The coordinator first runs a requirements discovery and solution design conversation for non-trivial work, then drafts a `spec` (the agreed "what") for your approval before breaking work into tasks.
 - For bigger questions, the coordinator should usually delegate fact-finding and research to `scout` or `deep-review` rather than trying to carry broad investigation inside the active session.
 - Your normal human role is to provide goals, approve or revise specs when scope changes, and review results — not to manually babysit every implementation step.
 - Keep `coordinator` as your active agent for normal use. Direct `@worker`, `@scout`, or `@deep-review` mentions are supported as an explicit helper-agent override path, but they are still exceptional/manual usage rather than the default workflow.
@@ -142,7 +142,7 @@ Recommended default flow for tracked work:
 
 1. Talk to `coordinator` as your active agent.
 2. Describe the outcome you want.
-3. Review and approve the drafted `spec`.
+3. Review and approve the drafted `spec` after the discovery/design conversation.
 4. Let the coordinator dispatch workers for bounded tasks.
 5. Come back later and ask the coordinator to resume the plan or report progress.
 
@@ -152,7 +152,7 @@ Ask the coordinator to create a plan:
 Add OAuth2 authentication to the API
 ```
 
-The coordinator will draft a `spec` (requirements) and ask for your approval before breaking work into tasks. Once you approve, it moves straight into task creation and worker dispatch without asking for an extra go-ahead.
+The coordinator will first guide requirements discovery and solution design, then draft a `spec` (the agreed outcome) and ask for your approval before breaking work into tasks. Once you approve, it moves straight into task creation and worker dispatch without asking for an extra go-ahead.
 
 ### Tracked work vs direct helper-agent override
 
@@ -160,7 +160,7 @@ This repository supports two intentional operating modes:
 
 1. **Tracked coordinator-led work (default)**
    - Use `coordinator` as your active agent.
-   - The coordinator owns plans, specs, approval gates, task creation, dependency checks, and dispatch.
+   - The coordinator owns plans, discovery/design checkpoints, specs, approval gates, task creation, dependency checks, and dispatch.
    - Workers execute bounded tracked tasks and update task state in `agentbook`.
 
 2. **Direct helper-agent override work (manual/exception path)**
@@ -189,7 +189,7 @@ agentbook summary oauth2-auth
 
 This repository defaults to a **coordinator-owned planning model** for tracked work:
 
-- `coordinator` owns plans, specs, approval gates, task creation, dependency checks, dispatch sequencing, and final design/task-boundary decisions.
+- `coordinator` owns plans, discovery/design checkpoints, specs, approval gates, task creation, dependency checks, dispatch sequencing, and final design/task-boundary decisions.
 - `worker` is a general-purpose executor that completes one assigned task, verifies the result, updates task status, and stops.
 - `scout` is a vendored helper for delegated codebase investigation and fact-finding. It may use bash for read-only git and configured remote-provider inspection only, with GET/read-only provider checks and no mutating shell features such as checkout/reset/clean/switch/merge/rebase/push/fetch/pull, redirects, or write-producing pipes.
 - `deep-review` is a read-only helper for thorough review passes, higher-confidence critique, and design-risk checking. It may also use bash for read-only git and configured remote-provider inspection only, with GET/read-only provider checks and no mutating shell features such as checkout/reset/clean/switch/merge/rebase/push/fetch/pull, redirects, or write-producing pipes.
@@ -271,8 +271,8 @@ For the full agent workflow and command details, see [`skills/agentbook/SKILL.md
 
 Plans include an `id`, user-facing `name`, `title`, `description`, `status`, a `spec` field, and a `document` field.
 
-- `spec` is the user-owned requirements ("what"). The coordinator drafts it and proposes revisions; the user approves each revision. Each change flips the plan to `needs_spec_approval` until the user re-approves.
-- `document` is the coordinator-owned architecture and notes ("how"). It is a living artifact updated throughout execution.
+- `spec` is the user-owned requirements ("what") and records the agreed outcome of the discovery/design conversation. The coordinator drafts it and proposes revisions; the user approves each revision. Each change flips the plan to `needs_spec_approval` until the user re-approves.
+- `document` is the coordinator-owned architecture and notes ("how"). It is a living artifact updated throughout execution and can capture solution rationale, testing notes, documentation decisions, and current status.
 
 Plan statuses:
 

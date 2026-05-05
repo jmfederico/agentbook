@@ -90,10 +90,10 @@ Tasks can declare dependencies with `--depends-on` as a comma-separated list of 
 
 ### `spec`
 
-The `spec` field stores the stable, user-owned requirements for a plan: goals, scope, non-goals, and acceptance criteria.
+The `spec` field stores the stable, user-owned requirements for a plan and the agreed outcome of the discovery/design conversation: goals, scope, non-goals, acceptance criteria, solution direction, and trade-offs.
 
 ### `document`
 
-The `document` field stores execution context: architecture notes, key files, constraints, risks, task breakdown rationale, open questions, and current status notes.
+The `document` field stores execution context: architecture notes, key files, constraints, risks, task breakdown rationale, open questions, testing notes, documentation decisions, and current status notes.
 
 Both fields are free-form markdown.

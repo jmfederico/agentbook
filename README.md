@@ -7,7 +7,7 @@ Cross-session plan tracking for AI agents, backed by SQLite.
 ## Features
 
 - Shared plan and task tracking across sessions and git worktrees
-- Simple CLI for plans, tasks, summaries, initialization, and a local dashboard UI
+- Simple CLI for plans, tasks, summaries, and initialization
 - Plan documents that act as durable handoff context between agents
 - Agent-oriented workflow with coordinator-owned decisions, narrow worker tasks, and delegated research/review helpers
 - Automatic database migration from legacy `.opencode/agentbook.db` when needed
@@ -258,11 +258,10 @@ agentbook task update <task-id> --status completed --notes "Implemented and test
 
 For repeated review/checkpoint follow-ups, prefer numbered pass names like `Review pass 1`, `Review pass 2`, with matching session labels such as `review-pass-1` and `review-pass-2`.
 
-### Summary, UI, and init
+### Summary and init
 
 ```bash
 agentbook summary oauth2-auth
-agentbook ui --port 3141
 agentbook init
 ```
 

@@ -466,7 +466,6 @@ Commands:
   task update   <task-id> [--status <s>] [--assignee <a>] [--notes <n>] [--session <sid>] [--worktree <dir>] [--title <t>] [--description <d>] [--priority <n>] [--depends-on <ids>]
 
   summary       <plan-id|plan-name>
-  ui [--port <n>]   Launch the dashboard web UI (default port: 3141)
   init
 
 Environment:
@@ -484,19 +483,6 @@ if (args.length === 0 || args[0] === "--help" || args[0] === "-h") usage()
 const cmd = args[0]
 const sub = args[1]
 const rest = args.slice(2)
-
-if (cmd === "ui") {
-  const port = parseInt(flag(args.slice(1), "--port") || process.env.PORT || "3141", 10)
-  const { startServer } = await import("./ui/server.ts")
-  startServer(port)
-  console.log(`Agentbook Dashboard: http://localhost:${port}`)
-  try {
-    const open = process.platform === "darwin" ? "open" : process.platform === "win32" ? "start" : "xdg-open"
-    execSync(`${open} http://localhost:${port}`, { stdio: "ignore" })
-  } catch {}
-  // Keep the process alive
-  await new Promise(() => {})
-}
 
 const db = open()
 

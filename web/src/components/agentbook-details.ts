@@ -282,10 +282,11 @@ export class AgentbookDetailPanel extends LitElement {
 
         <div class="meta-grid">
           ${this.renderField("Title", project.title)}
-          ${this.renderField("Repository", project.name, { mono: true })}
+          ${this.renderField("Name", project.name, { mono: true })}
           ${this.renderField("Plans", project.plan_count)}
           ${this.renderField("Tasks", project.task_count)}
-          ${this.renderField("Database", project.db_path, { mono: true })}
+          ${this.renderField("Path", project.path, { mono: true })}
+          ${this.renderField("Source", project.source || "—")}
           ${this.renderField("Updated", formatTimestamp(project.updated_at))}
           ${this.renderField("Git root", project.git_root, { mono: true })}
           ${this.renderField("Git common dir", project.git_common_dir, { mono: true })}

@@ -146,7 +146,7 @@ export class AgentbookProjectBrowser extends LitElement {
           ${selectedProject
             ? html`
                 <div class="meta">${selectedProject.name}</div>
-                <div class="submeta">${selectedProject.db_path}</div>
+                <div class="submeta">${selectedProject.path}</div>
               `
             : html`<div class="empty">Choose a project to browse its plans.</div>`}
         </div>

@@ -1,5 +1,15 @@
 import { resolveApiBaseUrl, resolveWebSocketUrl } from "./env"
-import type { LiveConnectionState, PlanRow, PlanSummary, ProjectRecord, SelectionState, SocketMessage, TaskRow } from "./types"
+import type {
+  LiveConnectionState,
+  PlanRow,
+  PlanSummary,
+  ProjectDiscoveryResponse,
+  ProjectRefreshResponse,
+  ProjectRecord,
+  SelectionState,
+  SocketMessage,
+  TaskRow,
+} from "./types"
 
 function buildQuery(params: Record<string, string | undefined>) {
   const search = new URLSearchParams()
@@ -32,6 +42,14 @@ export class AgentbookApiClient {
 
   listProjects() {
     return this.request<{ projects: ProjectRecord[]; currentProjectId: string }>("/api/projects")
+  }
+
+  listProjectDiscoverySources() {
+    return this.request<ProjectDiscoveryResponse>("/api/projects/discovery")
+  }
+
+  refreshProjects() {
+    return this.request<ProjectRefreshResponse>("/api/projects/discovery/refresh", { method: "POST" })
   }
 
   listPlans(projectId: string, status?: string) {

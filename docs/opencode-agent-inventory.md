@@ -2,6 +2,8 @@
 
 This document evaluates the built-in OpenCode agents against this repository's [agent and skill evaluation framework](./agent-skill-evaluation-framework.md), with a default bias toward vendoring useful upstream definitions locally when they add a clear autonomy or permission boundary.
 
+It only covers OpenCode-native agents. Pi or other host-specific agent inventories and session-extraction behavior should live in their own adapter or skill docs, while the durable agentbook model remains host-neutral.
+
 ## Built-in agent inventory
 
 | Upstream agent | Mode | Upstream role | Fit for this repo | Vendoring decision |

@@ -49,6 +49,7 @@ describe("Plan CRUD", () => {
     expect(p.document).toBe("Document content")
     expect(p.spec).toBe("Spec content")
     expect(p.created_by).toBe("tester")
+    expect(typeof p.project_id).toBe("string")
     expect(p.status).toBe("draft")
     expect(typeof p.id).toBe("string")
     expect(typeof p.created_at).toBe("number")
@@ -172,7 +173,7 @@ describe("plan get shape lock", () => {
     const plan = getPlan(db, created.id as string)
 
     const expectedKeys = [
-      "id", "name", "title", "description", "status",
+      "id", "project_id", "name", "title", "description", "status",
       "spec", "document", "created_by", "created_at", "updated_at",
     ].sort()
 
@@ -500,6 +501,7 @@ describe("summary shape", () => {
     // Plan subobject includes spec and document
     const planObj = s.plan as Record<string, unknown>
     expect(planObj.id).toBe(id)
+    expect(typeof planObj.project_id).toBe("string")
     expect(planObj.spec).toBe("the-spec")
     expect(planObj.document).toBe("the-doc")
     expect(planObj.title).toBe("Summary Plan")

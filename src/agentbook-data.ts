@@ -3,105 +3,155 @@ import { randomUUIDv7 } from "bun"
 import fs from "fs"
 import path from "path"
 import { execSync } from "child_process"
+import { createHash } from "crypto"
+import type {
+  CreatePlanInput,
+  CreateTaskInput,
+  ProjectDiscoveryResponse,
+  ProjectDiscoverySource,
+  ProjectRefreshResponse,
+  PlanLookup,
+  PlanRow,
+  PlanSummary,
+  ProjectRecord,
+  ProjectRow,
+  TaskListFilters,
+  TaskRow,
+  UpdatePlanInput,
+  UpdateTaskInput,
+} from "./shared-types"
 
-export type PlanRow = {
-  id: string
-  name: string
-  title: string
-  description: string
-  document: string
-  spec: string
-  status: string
-  created_by: string
-  created_at: number
-  updated_at: number
-}
-
-export type TaskRow = {
-  id: string
-  plan_id: string
-  title: string
-  description: string
-  status: string
-  priority: number
-  position: number
-  assignee: string
-  worktree_dir: string
-  session_id: string
-  depends_on: string
-  notes: string
-  created_at: number
-  updated_at: number
-}
-
-export type PlanLookup = {
-  plan: PlanRow | null
-  multiple: boolean
-}
-
-export type TaskListFilters = {
-  planRef?: string
-  status?: string
-}
-
-export type CreatePlanInput = {
-  title: string
-  name?: string
-  description?: string
-  document?: string
-  spec?: string
-  createdBy?: string
-}
-
-export type UpdatePlanInput = {
-  name?: string
-  title?: string
-  description?: string
-  document?: string
-  spec?: string
-  status?: string
-}
-
-export type CreateTaskInput = {
-  planRef: string
-  title: string
-  description?: string
-  priority?: number
-  dependsOn?: string
-}
-
-export type UpdateTaskInput = {
-  title?: string
-  description?: string
-  status?: string
-  priority?: number
-  dependsOn?: string
-  assignee?: string
-  notes?: string
-  session?: string
-  worktree?: string
-}
-
-export type PlanSummary = {
-  plan: Pick<PlanRow, "id" | "name" | "title" | "status" | "description" | "spec" | "document">
-  progress: {
-    total: number
-    completed: number
-    needs_guidance: number
-    percentage: number
-    by_status: Record<string, number>
-  }
-  tasks: Array<{
-    id: string
-    title: string
-    status: string
-    assignee: string | null
-    worktree_dir: string | null
-  }>
-}
+export type { CreatePlanInput, CreateTaskInput, PlanLookup, PlanRow, PlanSummary, ProjectDiscoveryResponse, ProjectDiscoverySource, ProjectRefreshResponse, ProjectRecord, ProjectRow, TaskListFilters, TaskRow, UpdatePlanInput, UpdateTaskInput } from "./shared-types"
 
 const LEGACY_TASK_STATUS_ALIASES: Record<string, string> = {
   needs_review: "needs_guidance",
+}
+
+function now() {
+  return Date.now()
+}
+
+function canonicalizeFsPath(input: string): string {
+  try {
+    return fs.realpathSync(input)
+  } catch {
+    return path.resolve(input)
+  }
+}
+
+function runGit(command: string, cwd: string): string | null {
+  try {
+    return execSync(command, { cwd, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] }).trim()
+  } catch {
+    return null
+  }
+}
+
+function currentProjectPath(): string {
+  const cwd = canonicalizeFsPath(process.cwd())
+  const gitRoot = runGit("git rev-parse --show-toplevel", cwd)
+  return gitRoot ? canonicalizeFsPath(gitRoot) : cwd
+}
+
+function currentProjectSource(): string {
+  return runGit("git rev-parse --show-toplevel", canonicalizeFsPath(process.cwd())) ? "git" : "filesystem"
+}
+
+function projectNameForPath(projectPath: string): string {
+  return path.basename(projectPath) || "agentbook"
+}
+
+function projectIdForPath(projectPath: string): string {
+  return `project-${createHash("sha1").update(canonicalizeFsPath(projectPath)).digest("hex").slice(0, 12)}`
+}
+
+function currentProjectSeed(): ProjectRow {
+  const projectPath = currentProjectPath()
+  const ts = now()
+  return {
+    id: projectIdForPath(projectPath),
+    path: projectPath,
+    name: projectNameForPath(projectPath),
+    title: projectNameForPath(projectPath),
+    description: projectPath,
+    source: currentProjectSource(),
+    created_at: ts,
+    updated_at: ts,
+  }
+}
+
+function projectGitInfo(projectPath: string): Pick<ProjectRecord, "git_root" | "git_common_dir"> {
+  const gitRoot = runGit("git rev-parse --show-toplevel", projectPath)
+  if (!gitRoot) return { git_root: null, git_common_dir: null }
+
+  const gitCommonDirRaw = runGit("git rev-parse --git-common-dir", projectPath)
+  return {
+    git_root: canonicalizeFsPath(gitRoot),
+    git_common_dir: gitCommonDirRaw ? canonicalizeFsPath(path.resolve(projectPath, gitCommonDirRaw)) : null,
+  }
+}
+
+const PROJECT_DISCOVERY_SOURCES: ProjectDiscoverySource[] = [
+  {
+    id: "opencode",
+    title: "opencode",
+    description: "Discover projects from opencode workspaces and metadata.",
+  },
+  {
+    id: "pi",
+    title: "Pi.dev",
+    description: "Discover projects from Pi.dev-backed workflows and metadata.",
+  },
+  {
+    id: "manual",
+    title: "Manual / generic",
+    description: "Keep canonical filesystem-path projects in the shared registry.",
+  },
+]
+
+export function listProjectDiscoverySources(): ProjectDiscoverySource[] {
+  return PROJECT_DISCOVERY_SOURCES
+}
+
+export function refreshProjectRegistry(db: Database): ProjectRefreshResponse {
+  const currentProject = getCurrentProject(db)
+  return {
+    currentProjectId: currentProject.id,
+    projects: listProjects(db),
+    sources: listProjectDiscoverySources(),
+  }
+}
+
+function ensureProjectRow(db: Database, seed: ProjectRow): ProjectRow {
+  const existing = db.query(`SELECT * FROM project WHERE path = ?`).get(seed.path) as ProjectRow | null
+  if (existing) return existing
+
+  db.run(
+    `INSERT INTO project (id, path, name, title, description, source, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [seed.id, seed.path, seed.name, seed.title, seed.description, seed.source, seed.created_at, seed.updated_at],
+  )
+  return db.query(`SELECT * FROM project WHERE id = ?`).get(seed.id) as ProjectRow
+}
+
+export function resolveCurrentProjectPath() {
+  return currentProjectPath()
+}
+
+export function getCurrentProjectRow(db: Database): ProjectRow {
+  return ensureProjectRow(db, currentProjectSeed())
+}
+
+export function getCurrentProject(db: Database): ProjectRecord {
+  return projectRowToRecord(db, getCurrentProjectRow(db))
+}
+
+export function getProjectRow(db: Database, projectId: string): ProjectRow | null {
+  return (db.query(`SELECT * FROM project WHERE id = ?`).get(projectId) as ProjectRow | null) ?? null
+}
+
+export function getProject(db: Database, projectId: string): ProjectRecord | null {
+  const row = getProjectRow(db, projectId)
+  return row ? projectRowToRecord(db, row) : null
 }
 
 export function resolveSharedRoot(): string | null {
@@ -140,8 +190,29 @@ export function resolveDbPath(): string {
 }
 
 export function migrateSchema(db: Database) {
+  db.run(`CREATE TABLE IF NOT EXISTS project (
+    id TEXT PRIMARY KEY,
+    path TEXT NOT NULL UNIQUE,
+    name TEXT NOT NULL,
+    title TEXT NOT NULL,
+    description TEXT DEFAULT '',
+    source TEXT DEFAULT '',
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  )`)
+
+  const projectColumns = db.query(`PRAGMA table_info(project)`).all() as Array<{ name: string }>
+  if (!projectColumns.some((column) => column.name === "path")) db.run(`ALTER TABLE project ADD COLUMN path TEXT DEFAULT ''`)
+  if (!projectColumns.some((column) => column.name === "name")) db.run(`ALTER TABLE project ADD COLUMN name TEXT DEFAULT ''`)
+  if (!projectColumns.some((column) => column.name === "title")) db.run(`ALTER TABLE project ADD COLUMN title TEXT DEFAULT ''`)
+  if (!projectColumns.some((column) => column.name === "description")) db.run(`ALTER TABLE project ADD COLUMN description TEXT DEFAULT ''`)
+  if (!projectColumns.some((column) => column.name === "source")) db.run(`ALTER TABLE project ADD COLUMN source TEXT DEFAULT ''`)
+
+  const currentProject = ensureProjectRow(db, currentProjectSeed())
+
   db.run(`CREATE TABLE IF NOT EXISTS plan (
     id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL REFERENCES project(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
     title TEXT NOT NULL,
     description TEXT DEFAULT '',
@@ -151,16 +222,17 @@ export function migrateSchema(db: Database) {
     updated_at INTEGER NOT NULL
   )`)
   const planColumns = db.query(`PRAGMA table_info(plan)`).all() as Array<{ name: string }>
+  if (!planColumns.some((column) => column.name === "project_id")) db.run(`ALTER TABLE plan ADD COLUMN project_id TEXT DEFAULT ''`)
   if (!planColumns.some((column) => column.name === "name")) {
     db.run(`ALTER TABLE plan ADD COLUMN name TEXT DEFAULT ''`)
     db.run(`UPDATE plan SET name = title WHERE name = ''`)
   }
-  if (!planColumns.some((column) => column.name === "document")) {
-    db.run(`ALTER TABLE plan ADD COLUMN document TEXT DEFAULT ''`)
-  }
-  if (!planColumns.some((column) => column.name === "spec")) {
-    db.run(`ALTER TABLE plan ADD COLUMN spec TEXT DEFAULT ''`)
-  }
+  if (!planColumns.some((column) => column.name === "document")) db.run(`ALTER TABLE plan ADD COLUMN document TEXT DEFAULT ''`)
+  if (!planColumns.some((column) => column.name === "spec")) db.run(`ALTER TABLE plan ADD COLUMN spec TEXT DEFAULT ''`)
+  db.run(`UPDATE plan SET project_id = ? WHERE project_id = '' OR project_id IS NULL`, [currentProject.id])
+  db.run(`CREATE INDEX IF NOT EXISTS plan_project_idx ON plan(project_id)`)
+  db.run(`CREATE INDEX IF NOT EXISTS plan_status_idx ON plan(status)`)
+
   db.run(`CREATE TABLE IF NOT EXISTS task (
     id TEXT PRIMARY KEY,
     plan_id TEXT NOT NULL REFERENCES plan(id) ON DELETE CASCADE,
@@ -189,10 +261,11 @@ export function openAgentbookDb() {
   db.run("PRAGMA journal_mode=WAL")
   db.run("PRAGMA foreign_keys=ON")
   migrateSchema(db)
+  getCurrentProjectRow(db)
   return db
 }
 
-const now = () => Date.now()
+const nowTs = () => Date.now()
 
 export function canonicalTaskStatus(status: string): string {
   return LEGACY_TASK_STATUS_ALIASES[status] || status
@@ -210,32 +283,52 @@ export function normalizeTaskRow(task: Record<string, unknown>) {
   }
 }
 
-export function lookupPlan(db: Database, ref: string): PlanLookup {
+function projectRowToRecord(db: Database, row: ProjectRow): ProjectRecord {
+  const plans = listPlans(db, { projectId: row.id })
+  const tasks = listTasks(db, { projectId: row.id })
+  const updatedAt = Math.max(row.updated_at, ...plans.map((plan) => plan.updated_at), ...tasks.map((task) => task.updated_at))
+
+  return {
+    ...row,
+    updated_at: updatedAt,
+    ...projectGitInfo(row.path),
+    plan_count: plans.length,
+    task_count: tasks.length,
+  }
+}
+
+export function listProjects(db: Database): ProjectRecord[] {
+  const rows = db.query(`SELECT * FROM project ORDER BY updated_at DESC, path ASC`).all() as ProjectRow[]
+  return rows.map((row) => projectRowToRecord(db, row))
+}
+
+export function lookupPlan(db: Database, ref: string, projectId = getCurrentProjectRow(db).id): PlanLookup {
   const byId = db.query(`SELECT * FROM plan WHERE id = ?`).get(ref) as PlanRow | null
   if (byId) return { plan: byId, multiple: false }
 
-  const byName = db.query(`SELECT * FROM plan WHERE name = ? ORDER BY created_at DESC`).all(ref) as PlanRow[]
+  const byName = db.query(`SELECT * FROM plan WHERE name = ? AND project_id = ? ORDER BY created_at DESC`).all(ref, projectId) as PlanRow[]
   if (byName.length === 1) return { plan: byName[0], multiple: false }
 
   return { plan: null, multiple: byName.length > 1 }
 }
 
-export function resolvePlan(db: Database, ref: string): PlanRow | null {
-  return lookupPlan(db, ref).plan
+export function resolvePlan(db: Database, ref: string, projectId?: string): PlanRow | null {
+  return lookupPlan(db, ref, projectId).plan
 }
 
-export function listPlans(db: Database, status?: string): PlanRow[] {
-  return status
-    ? (db.query(`SELECT * FROM plan WHERE status = ? ORDER BY created_at DESC`).all(status) as PlanRow[])
-    : (db.query(`SELECT * FROM plan WHERE status != 'archived' ORDER BY created_at DESC`).all() as PlanRow[])
+export function listPlans(db: Database, options: { status?: string; projectId?: string } = {}): PlanRow[] {
+  const projectId = options.projectId ?? getCurrentProjectRow(db).id
+  return options.status
+    ? (db.query(`SELECT * FROM plan WHERE project_id = ? AND status = ? ORDER BY created_at DESC`).all(projectId, options.status) as PlanRow[])
+    : (db.query(`SELECT * FROM plan WHERE project_id = ? AND status != 'archived' ORDER BY created_at DESC`).all(projectId) as PlanRow[])
 }
 
-export function createPlan(db: Database, input: CreatePlanInput): PlanRow {
+export function createPlan(db: Database, input: CreatePlanInput, projectId = getCurrentProjectRow(db).id): PlanRow {
   const id = randomUUIDv7()
-  const ts = now()
+  const ts = nowTs()
   db.run(
-    `INSERT INTO plan (id, name, title, description, document, spec, status, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?)`,
-    [id, input.name || input.title, input.title, input.description || "", input.document || "", input.spec || "", input.createdBy || "", ts, ts],
+    `INSERT INTO plan (id, project_id, name, title, description, document, spec, status, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?)`,
+    [id, projectId, input.name || input.title, input.title, input.description || "", input.document || "", input.spec || "", input.createdBy || "", ts, ts],
   )
   return db.query(`SELECT * FROM plan WHERE id = ?`).get(id) as PlanRow
 }
@@ -244,12 +337,12 @@ export function archivePlan(db: Database, planId: string): PlanRow {
   const existing = db.query(`SELECT * FROM plan WHERE id = ?`).get(planId) as PlanRow | null
   if (!existing) throw new Error(`plan not found: ${planId}`)
 
-  const ts = now()
+  const ts = nowTs()
   db.run(`UPDATE plan SET status = 'archived', updated_at = ? WHERE id = ?`, [ts, planId])
   return { ...existing, status: "archived", updated_at: ts }
 }
 
-export function archivePlansOlderThan(db: Database, olderThan: string): PlanRow[] {
+export function archivePlansOlderThan(db: Database, olderThan: string, projectId = getCurrentProjectRow(db).id): PlanRow[] {
   const match = olderThan.match(/^(\d+)([hdw])$/)
   if (!match) throw new Error(`invalid duration: ${olderThan}; expected formats like 12h, 7d, or 2w`)
 
@@ -261,12 +354,12 @@ export function archivePlansOlderThan(db: Database, olderThan: string): PlanRow[
     w: 7 * 24 * 60 * 60 * 1000,
   }
 
-  const cutoff = now() - value * multipliers[unit]
+  const cutoff = nowTs() - value * multipliers[unit]
   const candidates = db
-    .query(`SELECT * FROM plan WHERE status IN ('draft', 'active') AND updated_at < ? ORDER BY updated_at ASC`)
-    .all(cutoff) as PlanRow[]
+    .query(`SELECT * FROM plan WHERE project_id = ? AND status IN ('draft', 'active') AND updated_at < ? ORDER BY updated_at ASC`)
+    .all(projectId, cutoff) as PlanRow[]
 
-  const ts = now()
+  const ts = nowTs()
   for (const plan of candidates) {
     db.run(`UPDATE plan SET status = 'archived', updated_at = ? WHERE id = ?`, [ts, plan.id])
   }
@@ -287,7 +380,7 @@ export function updatePlan(db: Database, planId: string, input: UpdatePlanInput)
     spec: input.spec ?? existing.spec,
     status: input.status ?? existing.status,
   }
-  const ts = now()
+  const ts = nowTs()
   db.run(`UPDATE plan SET name = ?, title = ?, description = ?, document = ?, spec = ?, status = ?, updated_at = ? WHERE id = ?`, [
     next.name,
     next.title,
@@ -301,14 +394,14 @@ export function updatePlan(db: Database, planId: string, input: UpdatePlanInput)
   return { ...next, updated_at: ts }
 }
 
-export function createTask(db: Database, input: CreateTaskInput): TaskRow {
-  const lookup = lookupPlan(db, input.planRef)
+export function createTask(db: Database, input: CreateTaskInput, projectId = getCurrentProjectRow(db).id): TaskRow {
+  const lookup = lookupPlan(db, input.planRef, projectId)
   if (!lookup.plan) throw new Error(lookup.multiple ? `multiple plans found with name: ${input.planRef}` : `plan not found: ${input.planRef}`)
 
   const max = db.query(`SELECT COALESCE(MAX(position), -1) as m FROM task WHERE plan_id = ?`).get(lookup.plan.id) as { m: number }
   const position = max.m + 1
   const id = randomUUIDv7()
-  const ts = now()
+  const ts = nowTs()
   db.run(
     `INSERT INTO task (id, plan_id, title, description, status, priority, position, depends_on, created_at, updated_at) VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?)`,
     [id, lookup.plan.id, input.title, input.description || "", input.priority ?? 0, position, input.dependsOn || "", ts, ts],
@@ -317,23 +410,29 @@ export function createTask(db: Database, input: CreateTaskInput): TaskRow {
 }
 
 export function listTasks(db: Database, filters: TaskListFilters = {}): TaskRow[] {
-  let q = `SELECT * FROM task WHERE 1=1`
+  let q = `SELECT task.* FROM task INNER JOIN plan ON plan.id = task.plan_id WHERE 1=1`
   const params: unknown[] = []
 
+  if (filters.projectId || !filters.planRef) {
+    const projectId = filters.projectId ?? getCurrentProjectRow(db).id
+    q += ` AND plan.project_id = ?`
+    params.push(projectId)
+  }
+
   if (filters.planRef) {
-    const lookup = lookupPlan(db, filters.planRef)
+    const lookup = lookupPlan(db, filters.planRef, filters.projectId)
     if (!lookup.plan) throw new Error(lookup.multiple ? `multiple plans found with name: ${filters.planRef}` : `plan not found: ${filters.planRef}`)
-    q += ` AND plan_id = ?`
+    q += ` AND task.plan_id = ?`
     params.push(lookup.plan.id)
   }
 
   if (filters.status) {
     const statusValues = taskStatusFilterValues(filters.status)
-    q += ` AND status IN (${statusValues.map(() => "?").join(", ")})`
+    q += ` AND task.status IN (${statusValues.map(() => "?").join(", ")})`
     params.push(...statusValues)
   }
 
-  q += ` ORDER BY position`
+  q += ` ORDER BY task.position`
   return (db.query(q).all(...params) as TaskRow[]).map((task) => normalizeTaskRow(task)) as TaskRow[]
 }
 
@@ -360,7 +459,7 @@ export function updateTask(db: Database, id: string, input: UpdateTaskInput): Ta
     worktree_dir: input.worktree ?? existing.worktree_dir,
   }
 
-  const ts = now()
+  const ts = nowTs()
   db.run(
     `UPDATE task SET title = ?, description = ?, status = ?, priority = ?, assignee = ?, worktree_dir = ?, session_id = ?, depends_on = ?, notes = ?, updated_at = ? WHERE id = ?`,
     [next.title, next.description, next.status, next.priority, next.assignee, next.worktree_dir, next.session_id, next.depends_on, next.notes, ts, id],
@@ -373,7 +472,7 @@ export function getPlanSummary(db: Database, ref: string): PlanSummary {
   if (!lookup.plan) throw new Error(lookup.multiple ? `multiple plans found with name: ${ref}` : `plan not found: ${ref}`)
   const plan = lookup.plan
 
-  const tasks = listTasks(db, { planRef: plan.id })
+  const tasks = listTasks(db, { planRef: plan.id, projectId: plan.project_id })
   const counts: Record<string, number> = {}
   for (const task of tasks) counts[task.status] = (counts[task.status] || 0) + 1
   const total = tasks.length
@@ -384,6 +483,7 @@ export function getPlanSummary(db: Database, ref: string): PlanSummary {
   return {
     plan: {
       id: plan.id,
+      project_id: plan.project_id,
       name: plan.name,
       title: plan.title,
       status: plan.status,

@@ -1,16 +1,24 @@
 # agentbook
 
-Cross-session plan tracking for AI agents, backed by SQLite.
+Cross-session plan tracking for AI agents and host adapters, backed by SQLite.
 
-`agentbook` helps a human delegate multi-step work to AI agents with minimal ongoing supervision once the requirements and solution direction are clear. It gives coordinator and worker agents a shared SQLite-backed plan ledger that persists across sessions and git worktrees.
+`agentbook` helps a human delegate multi-step work to AI agents with minimal ongoing supervision once the requirements and solution direction are clear. It gives coordinator and worker agents a shared SQLite-backed ledger for projects, plans, and tasks that persists across sessions and git worktrees.
 
 ## Features
 
 - Shared plan and task tracking across sessions and git worktrees
+- Canonical project records keyed by filesystem path
 - Simple CLI for plans, tasks, summaries, and initialization
 - Plan documents that act as durable handoff context between agents
 - Agent-oriented workflow with coordinator-owned decisions, narrow worker tasks, and delegated research/review helpers
-- Automatic database migration from legacy `.opencode/agentbook.db` when needed
+
+## Project and host model
+
+- Projects are the durable shared object in this repo and are identified by canonical filesystem path.
+- Plans and tasks attach to projects; adapter provenance is optional metadata, not part of identity.
+- Git metadata is derived on demand from the project path and current checkout when the UI or API needs it.
+- Workspaces and sessions are contextual or host-native in this slice, not first-class persisted tables.
+- Host adapters can discover or refresh projects, but core project/plan/task semantics stay host-neutral.
 
 ## Web UI workflow
 
@@ -37,7 +45,7 @@ The UI is intentionally read-only and has no authentication in this version. It 
 
 ## TL;DR — how to use the agents
 
-- Select `coordinator` as your active agent (set it as your default or switch to it in opencode) — it plans and keeps track of your work across sessions and worktrees. Do not just `@coordinator` from another agent; actually talk to `coordinator` as your active agent.
+- Select `coordinator` as your active agent in your host UI or CLI — for opencode, set it as your default or switch to it there. Do not just `@coordinator` from another agent; actually talk to `coordinator` as your active agent.
 - The coordinator first runs a requirements discovery and solution design conversation for non-trivial work, then drafts a `spec` (the agreed "what") for your approval before breaking work into tasks.
 - For bigger questions, the coordinator should usually delegate fact-finding and research to `scout` or `deep-review` rather than trying to carry broad investigation inside the active session.
 - Your normal human role is to provide goals, approve or revise specs when scope changes, and review results — not to manually babysit every implementation step.
@@ -57,7 +65,7 @@ git clone https://github.com/jmfederico/agentbook.git /path/to/agentbook
 REPO_PATH="/path/to/agentbook"
 ```
 
-Register the skill path in your global opencode config, using the same checkout path you stored in `REPO_PATH`:
+Register the skill path in your host config, using the same checkout path you stored in `REPO_PATH` (opencode example):
 
 ```jsonc
 {
@@ -68,7 +76,7 @@ Register the skill path in your global opencode config, using the same checkout 
 }
 ```
 
-Install the bundled agents:
+If you are using opencode, install the bundled agents:
 
 ```bash
 mkdir -p ~/.config/opencode/agents
@@ -78,7 +86,7 @@ ln -s "$REPO_PATH/agents/scout.md" ~/.config/opencode/agents/scout.md
 ln -s "$REPO_PATH/agents/deep-review.md" ~/.config/opencode/agents/deep-review.md
 ```
 
-Also add the bundled tmp-folder and calibrated-assertions instructions to your global opencode config so agents consistently use `/tmp/opencode/` for scratch files and keep strong claims scoped:
+If you are using opencode, also add the bundled tmp-folder and calibrated-assertions instructions to your config so agents consistently use `/tmp/opencode/` for scratch files and keep strong claims scoped:
 
 ```jsonc
 {
@@ -107,7 +115,7 @@ bun link "$REPO_PATH"
 
 The `worker` agent is normally dispatched by `coordinator` for tracked task work and is visible in the `@` autocomplete menu so users can see it exists. Direct `@worker` mentions are also supported as an explicit override path, but `coordinator` remains the recommended entry point for normal work.
 
-## opencode configuration
+## Host configuration example (opencode)
 
 Recommended default agent:
 
@@ -140,6 +148,8 @@ Optional per-agent model overrides (choose whatever models fit your local setup)
 ```
 
 This repository leaves model choice to you; use the settings above as a local configuration template rather than a recommendation.
+
+Pi-based workflows should provide their own adapter or skill wiring for project discovery and session extraction. Those responsibilities are host-specific, while the durable agentbook model stays path-based and host-neutral.
 
 Recommended permissions after adding the bundled instructions above to `instructions`:
 
@@ -292,6 +302,14 @@ For the full agent workflow and command details, see [`skills/agentbook/SKILL.md
 
 ## Data model
 
+### Projects
+
+Projects are durable, host-neutral records keyed by canonical filesystem path.
+
+- Host adapters may discover or refresh them, but they do not own project identity.
+- Adapter/source provenance is optional metadata only.
+- Workspaces and sessions stay derived or host-native in this slice rather than first-class persisted objects.
+
 Plans include an `id`, user-facing `name`, `title`, `description`, `status`, a `spec` field, and a `document` field.
 
 - `spec` is the user-owned requirements ("what") and records the agreed outcome of the discovery/design conversation. The coordinator drafts it and proposes revisions; the user approves each revision. Each change flips the plan to `needs_spec_approval` until the user re-approves.
@@ -308,7 +326,7 @@ Plan statuses:
 - `cancelled`
 - `archived`
 
-Tasks belong to a plan and track ownership, notes, dependencies, session metadata, and execution status.
+Tasks belong to a plan and track ownership, notes, dependencies, and execution status; session metadata may be attached as provenance when available.
 
 Task statuses:
 

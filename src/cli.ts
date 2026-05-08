@@ -82,6 +82,7 @@ function planCreate(db: Database, args: string[]) {
   )
   json({
     id: created.id,
+    project_id: created.project_id,
     name: created.name,
     title: created.title,
     description: created.description,
@@ -94,7 +95,7 @@ function planCreate(db: Database, args: string[]) {
 }
 
 function planList(db: Database, args: string[]) {
-  json(listPlans(db, flag(args, "--status") || undefined))
+  json(listPlans(db, { status: flag(args, "--status") || undefined }))
 }
 
 function planArchive(db: Database, args: string[]) {
@@ -146,6 +147,7 @@ function planUpdate(db: Database, args: string[]) {
   )
   json({
     id: updated.id,
+    project_id: updated.project_id,
     name: updated.name,
     title: updated.title,
     description: updated.description,

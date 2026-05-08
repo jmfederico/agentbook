@@ -2,6 +2,8 @@
 
 This repository uses a simple rule: keep **plan ownership and orchestration** in the coordinator for tracked work, treat workers as **general-purpose executors**, and use **skills for reusable procedures** that can be loaded by multiple agents.
 
+Core agentbook concepts stay host-neutral; opencode-specific setup and Pi-specific adapter responsibilities should be documented as host integrations, not as durable platform assumptions.
+
 ## Decision order
 
 When deciding whether behavior belongs in an agent, a skill, or local repo guidance, evaluate it in this order:
@@ -35,6 +37,7 @@ When deciding whether behavior belongs in an agent, a skill, or local repo guida
 - **Skills are shared operational knowledge.** They should teach procedures, commands, checklists, and domain-specific workflows without redefining ownership boundaries.
 - **README and agent definitions should agree.** If a workflow rule changes, update the repository-facing docs and role definitions together.
 - **Spec is the agreed outcome.** The spec should record the result of the discovery/design conversation rather than acting as the first design proposal; `discovery` is the active shaping phase that precedes it.
+- **Host-specific setup examples stay labeled as examples.** For example, opencode config snippets illustrate one supported host, while Pi session extraction and workspace discovery remain adapter- or skill-level responsibilities.
 
 ## Responsibility evaluation
 
@@ -121,7 +124,7 @@ Keep guidance in **repo docs** when it is primarily for humans choosing how to o
 
 ## Default vendoring policy
 
-When evaluating upstream or built-in opencode agents:
+When evaluating upstream or built-in host agents (for example opencode):
 
 - start from the assumption that a useful definition should be copied into this repository
 - adapt the vendored version to this repo's coordinator-owned planning model and documentation style

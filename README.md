@@ -12,6 +12,29 @@ Cross-session plan tracking for AI agents, backed by SQLite.
 - Agent-oriented workflow with coordinator-owned decisions, narrow worker tasks, and delegated research/review helpers
 - Automatic database migration from legacy `.opencode/agentbook.db` when needed
 
+## Web UI workflow
+
+The repository now includes a read-only browser UI backed by the same SQLite database as the CLI.
+
+- Backend API: `bun run server`
+- Backend dev mode: `bun run server:dev`
+- Frontend dev server: `bun run ui:dev`
+- Frontend build: `bun run ui:build`
+- Frontend preview: `bun run ui:preview`
+
+Defaults:
+
+- Fastify listens on `http://127.0.0.1:3000`
+- WebSocket listens on `ws://127.0.0.1:3001/ws`
+- Vite dev server listens on `http://127.0.0.1:5173`
+
+Environment overrides:
+
+- `AGENTBOOK_API_TARGET` and `AGENTBOOK_WS_TARGET` configure the Vite proxy targets
+- `VITE_AGENTBOOK_API_BASE_URL` and `VITE_AGENTBOOK_WS_URL` override browser-side API/WebSocket URLs
+
+The UI is intentionally read-only and has no authentication in this version. It is meant for local, trusted exposure only unless you put your own auth/reverse-proxy boundary in front of it.
+
 ## TL;DR — how to use the agents
 
 - Select `coordinator` as your active agent (set it as your default or switch to it in opencode) — it plans and keeps track of your work across sessions and worktrees. Do not just `@coordinator` from another agent; actually talk to `coordinator` as your active agent.
@@ -324,11 +347,17 @@ That location is shared automatically across all git worktrees for the same repo
 ├── docs/
 │   ├── agent-skill-evaluation-framework.md
 │   └── opencode-agent-inventory.md
+├── src/
+│   ├── cli.ts
+│   ├── server.ts
+│   └── agentbook-data.ts
+├── web/
+│   └── src/
+├── dist/
+│   └── web/
 ├── skills/
 │   └── agentbook/
 │       └── SKILL.md
-├── src/
-│   └── cli.ts
 ├── LICENSE
 └── package.json
 ```
@@ -340,6 +369,8 @@ That location is shared automatically across all git worktrees for the same repo
 - `docs/opencode-agent-inventory.md` records which upstream/opencode agents were evaluated and why only selected definitions were vendored locally.
 - `skills/agentbook/SKILL.md` contains the detailed CLI and workflow reference.
 - `src/cli.ts` implements the CLI entrypoint.
+- `src/server.ts` implements the Fastify read-only API and WebSocket notifier.
+- `web/src/` contains the Lit frontend.
 
 ## License
 

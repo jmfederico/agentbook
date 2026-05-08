@@ -12,7 +12,22 @@
     "agents"
   ],
   "scripts": {
-    "test": "bun test"
+    "test": "bun test",
+    "server": "bun src/server.ts",
+    "server:dev": "bun --watch src/server.ts",
+    "ui:dev": "vite --config vite.config.ts",
+    "ui:build": "vite build --config vite.config.ts",
+    "ui:preview": "vite preview --config vite.config.ts"
+  },
+  "dependencies": {
+    "@fastify/cors": "^11.1.0",
+    "@fastify/websocket": "^11.1.0",
+    "fastify": "^5.6.0",
+    "lit": "^3.3.0",
+    "marked": "^15.0.0"
+  },
+  "devDependencies": {
+    "vite": "^6.0.0"
   },
   "license": "MIT"
 }

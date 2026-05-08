@@ -1,5 +1,5 @@
 import { LitElement, css, html } from "lit"
-import { customElement, property } from "lit/decorators.js"
+import { customElement } from "lit/decorators.js"
 import { marked } from "marked"
 
 marked.setOptions({ gfm: true, breaks: true })
@@ -52,6 +52,10 @@ function sanitizeRenderedHtml(htmlText: string) {
 
 @customElement("ab-markdown")
 export class AgentbookMarkdown extends LitElement {
+  static properties = {
+    content: { type: String },
+  }
+
   static styles = css`
     :host {
       display: block;
@@ -90,7 +94,7 @@ export class AgentbookMarkdown extends LitElement {
     }
   `
 
-  @property({ type: String }) content = ""
+  content = ""
 
   render() {
     const rendered = sanitizeRenderedHtml(marked.parse(this.content || "") as string)

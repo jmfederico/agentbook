@@ -3,6 +3,7 @@ node_modules/
 *.db-wal
 *.db-shm
 .opencode
+.playwright-cli
 tmp/
 test-results/
 *.bak

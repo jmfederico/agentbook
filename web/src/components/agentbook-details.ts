@@ -1,5 +1,5 @@
 import { LitElement, css, html } from "lit"
-import { customElement, property } from "lit/decorators.js"
+import { customElement } from "lit/decorators.js"
 import type { PlanRow, PlanSummary, ProjectRecord, TaskRow } from "../lib/types"
 
 const dateTimeFormatter = new Intl.DateTimeFormat(undefined, {
@@ -27,6 +27,15 @@ function shouldCollapseMarkdown(value: string) {
 
 @customElement("ab-detail-panel")
 export class AgentbookDetailPanel extends LitElement {
+  static properties = {
+    project: { type: Object },
+    plan: { type: Object },
+    task: { type: Object },
+    summary: { type: Object },
+    loading: { type: Boolean },
+    connectionState: { type: String },
+  }
+
   static styles = css`
     :host {
       display: block;
@@ -204,12 +213,12 @@ export class AgentbookDetailPanel extends LitElement {
     }
   `
 
-  @property({ type: Object }) project: ProjectRecord | null = null
-  @property({ type: Object }) plan: PlanRow | null = null
-  @property({ type: Object }) task: TaskRow | null = null
-  @property({ type: Object }) summary: PlanSummary | null = null
-  @property({ type: Boolean }) loading = false
-  @property({ type: String }) connectionState = "closed"
+  project: ProjectRecord | null = null
+  plan: PlanRow | null = null
+  task: TaskRow | null = null
+  summary: PlanSummary | null = null
+  loading = false
+  connectionState = "closed"
 
   private renderField(label: string, value: string | number | null | undefined, opts: { mono?: boolean } = {}) {
     const content = formatValue(value)

@@ -5,6 +5,14 @@ const wsTarget = process.env.AGENTBOOK_WS_TARGET || "ws://127.0.0.1:3001"
 
 export default defineConfig({
   root: "web",
+  esbuild: {
+    tsconfigRaw: {
+      compilerOptions: {
+        experimentalDecorators: true,
+        useDefineForClassFields: false,
+      },
+    },
+  },
   server: {
     host: "127.0.0.1",
     port: 5173,

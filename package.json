@@ -15,6 +15,7 @@
     "test": "bun test",
     "server": "bun src/server.ts",
     "server:dev": "bun --watch src/server.ts",
+    "dev": "bun src/dev.ts",
     "ui:dev": "vite --config vite.config.ts",
     "ui:build": "vite build --config vite.config.ts",
     "ui:preview": "vite preview --config vite.config.ts"

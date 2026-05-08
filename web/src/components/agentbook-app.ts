@@ -1,5 +1,5 @@
 import { LitElement, css, html } from "lit"
-import { customElement, state } from "lit/decorators.js"
+import { customElement } from "lit/decorators.js"
 import { AgentbookApiClient, LiveUpdatesClient } from "../lib/api"
 import { readSelectionFromLocation, writeSelectionToLocation } from "../lib/routing"
 import type { LiveConnectionState, PlanRow, PlanSummary, ProjectRecord, SelectionState, TaskRow } from "../lib/types"
@@ -10,6 +10,22 @@ import "./agentbook-tasks"
 
 @customElement("ab-app")
 export class AgentbookApp extends LitElement {
+  static properties = {
+    projects: { state: true },
+    plans: { state: true },
+    tasks: { state: true },
+    selectedProject: { state: true },
+    selectedPlan: { state: true },
+    selectedTask: { state: true },
+    summary: { state: true },
+    selectedProjectId: { state: true },
+    selectedPlanId: { state: true },
+    selectedTaskId: { state: true },
+    loading: { state: true },
+    error: { state: true },
+    connectionState: { state: true },
+  }
+
   static styles = css`
     :host {
       display: block;
@@ -83,19 +99,19 @@ export class AgentbookApp extends LitElement {
     }
   `
 
-  @state() private projects: ProjectRecord[] = []
-  @state() private plans: PlanRow[] = []
-  @state() private tasks: TaskRow[] = []
-  @state() private selectedProject: ProjectRecord | null = null
-  @state() private selectedPlan: PlanRow | null = null
-  @state() private selectedTask: TaskRow | null = null
-  @state() private summary: PlanSummary | null = null
-  @state() private selectedProjectId = ""
-  @state() private selectedPlanId = ""
-  @state() private selectedTaskId = ""
-  @state() private loading = true
-  @state() private error: string | null = null
-  @state() private connectionState: LiveConnectionState = "closed"
+  private projects: ProjectRecord[] = []
+  private plans: PlanRow[] = []
+  private tasks: TaskRow[] = []
+  private selectedProject: ProjectRecord | null = null
+  private selectedPlan: PlanRow | null = null
+  private selectedTask: TaskRow | null = null
+  private summary: PlanSummary | null = null
+  private selectedProjectId = ""
+  private selectedPlanId = ""
+  private selectedTaskId = ""
+  private loading = true
+  private error: string | null = null
+  private connectionState: LiveConnectionState = "closed"
 
   private readonly api = new AgentbookApiClient()
   private readonly socket = new LiveUpdatesClient()
@@ -143,7 +159,9 @@ export class AgentbookApp extends LitElement {
     this.error = null
 
     try {
-      const projectResponse = options.refreshProjects || this.projects.length === 0 ? await this.api.listProjects() : null
+      const currentProjects = this.projects ?? []
+      const currentTasks = this.tasks ?? []
+      const projectResponse = options.refreshProjects || currentProjects.length === 0 ? await this.api.listProjects() : null
       if (requestId !== this.activeRequest) return
 
       if (projectResponse) {
@@ -151,7 +169,7 @@ export class AgentbookApp extends LitElement {
       }
 
       const routeSelection = options.selection ?? readSelectionFromLocation()
-      const availableProjects = this.projects.length ? this.projects : projectResponse?.projects ?? []
+      const availableProjects = currentProjects.length ? currentProjects : projectResponse?.projects ?? []
       const resolvedProjectId = this.resolveProjectId(routeSelection.projectId, availableProjects, projectResponse?.currentProjectId)
 
       if (!resolvedProjectId) {
@@ -203,7 +221,7 @@ export class AgentbookApp extends LitElement {
         this.tasks = taskResponse.tasks
 
         if (this.selectedTaskId) {
-          const matchedTask = this.tasks.find((task) => task.id === this.selectedTaskId) ?? null
+          const matchedTask = currentTasks.find((task) => task.id === this.selectedTaskId) ?? null
           this.selectedTask = matchedTask ?? this.selectedTask
           this.selectedTaskId = matchedTask?.id ?? this.selectedTaskId
         } else {
@@ -279,6 +297,9 @@ export class AgentbookApp extends LitElement {
 
   render() {
     const activePlanTitle = this.selectedPlan?.title ?? ""
+    const projects = this.projects ?? []
+    const plans = this.plans ?? []
+    const tasks = this.tasks ?? []
 
     return html`
       <div class="shell">
@@ -294,8 +315,8 @@ export class AgentbookApp extends LitElement {
 
         <main class="grid">
           <ab-project-browser
-            .projects=${this.projects}
-            .plans=${this.plans}
+            .projects=${projects}
+            .plans=${plans}
             .selectedProjectId=${this.selectedProjectId}
             .selectedPlanId=${this.selectedPlanId}
             .loading=${this.loading}
@@ -305,7 +326,7 @@ export class AgentbookApp extends LitElement {
           ></ab-project-browser>
 
           <ab-task-list
-            .tasks=${this.tasks}
+            .tasks=${tasks}
             .selectedTaskId=${this.selectedTaskId}
             .selectedPlanTitle=${activePlanTitle}
             .loading=${this.loading}

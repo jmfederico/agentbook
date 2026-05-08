@@ -1,9 +1,17 @@
 import { LitElement, css, html } from "lit"
-import { customElement, property } from "lit/decorators.js"
+import { customElement } from "lit/decorators.js"
 import type { PlanRow, ProjectRecord } from "../lib/types"
 
 @customElement("ab-project-browser")
 export class AgentbookProjectBrowser extends LitElement {
+  static properties = {
+    projects: { type: Array },
+    plans: { type: Array },
+    selectedProjectId: { type: String },
+    selectedPlanId: { type: String },
+    loading: { type: Boolean },
+  }
+
   static styles = css`
     :host {
       display: block;
@@ -96,11 +104,11 @@ export class AgentbookProjectBrowser extends LitElement {
     }
   `
 
-  @property({ type: Array }) projects: ProjectRecord[] = []
-  @property({ type: Array }) plans: PlanRow[] = []
-  @property({ type: String }) selectedProjectId = ""
-  @property({ type: String }) selectedPlanId = ""
-  @property({ type: Boolean }) loading = false
+  projects: ProjectRecord[] = []
+  plans: PlanRow[] = []
+  selectedProjectId = ""
+  selectedPlanId = ""
+  loading = false
 
   private selectProject(projectId: string) {
     this.dispatchEvent(new CustomEvent("project-selected", { detail: { projectId }, bubbles: true, composed: true }))
@@ -115,7 +123,9 @@ export class AgentbookProjectBrowser extends LitElement {
   }
 
   render() {
-    const selectedProject = this.projects.find((project) => project.id === this.selectedProjectId) ?? null
+    const projects = this.projects ?? []
+    const plans = this.plans ?? []
+    const selectedProject = projects.find((project) => project.id === this.selectedProjectId) ?? null
 
     return html`
       <section class="panel">
@@ -125,7 +135,7 @@ export class AgentbookProjectBrowser extends LitElement {
         </div>
 
         <div class="project-list">
-          ${this.projects.map(
+          ${projects.map(
             (project) => html`
               <button
                 class="project-card"
@@ -153,10 +163,10 @@ export class AgentbookProjectBrowser extends LitElement {
 
         <div>
           <div class="section-title">Plans</div>
-          ${this.plans.length
+          ${plans.length
             ? html`
                 <div class="plan-list">
-                  ${this.plans.map(
+                  ${plans.map(
                     (plan) => html`
                       <button
                         class="plan-card"

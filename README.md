@@ -16,11 +16,14 @@ Cross-session plan tracking for AI agents, backed by SQLite.
 
 The repository now includes a read-only browser UI backed by the same SQLite database as the CLI.
 
+- Combined dev workflow: `npm run dev` (or `bun run dev`)
 - Backend API: `bun run server`
 - Backend dev mode: `bun run server:dev`
 - Frontend dev server: `bun run ui:dev`
 - Frontend build: `bun run ui:build`
 - Frontend preview: `bun run ui:preview`
+
+The combined dev command starts the backend and UI with coordinated ports. It prefers the usual defaults (`3000`, `3001`, `5173`) and automatically falls back to free ports when those are busy. The UI binds to `0.0.0.0` by default so it is reachable from LAN/container environments, while the backend stays local unless you override it.
 
 Defaults:
 
@@ -30,8 +33,12 @@ Defaults:
 
 Environment overrides:
 
+- `HOST`, `PORT`, and `WS_PORT` configure the backend bind host and ports
+- `AGENTBOOK_UI_HOST` and `AGENTBOOK_UI_PORT` override the Vite bind host and port
 - `AGENTBOOK_API_TARGET` and `AGENTBOOK_WS_TARGET` configure the Vite proxy targets
 - `VITE_AGENTBOOK_API_BASE_URL` and `VITE_AGENTBOOK_WS_URL` override browser-side API/WebSocket URLs
+
+When `npm run dev` picks fallback ports, the console prints the selected API, WebSocket, and UI URLs so you can open the right page immediately.
 
 The UI is intentionally read-only and has no authentication in this version. It is meant for local, trusted exposure only unless you put your own auth/reverse-proxy boundary in front of it.
 

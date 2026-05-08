@@ -1,9 +1,16 @@
 import { LitElement, css, html } from "lit"
-import { customElement, property } from "lit/decorators.js"
+import { customElement } from "lit/decorators.js"
 import type { TaskRow } from "../lib/types"
 
 @customElement("ab-task-list")
 export class AgentbookTaskList extends LitElement {
+  static properties = {
+    tasks: { type: Array },
+    selectedTaskId: { type: String },
+    selectedPlanTitle: { type: String },
+    loading: { type: Boolean },
+  }
+
   static styles = css`
     :host {
       display: block;
@@ -86,16 +93,18 @@ export class AgentbookTaskList extends LitElement {
     }
   `
 
-  @property({ type: Array }) tasks: TaskRow[] = []
-  @property({ type: String }) selectedTaskId = ""
-  @property({ type: String }) selectedPlanTitle = ""
-  @property({ type: Boolean }) loading = false
+  tasks: TaskRow[] = []
+  selectedTaskId = ""
+  selectedPlanTitle = ""
+  loading = false
 
   private selectTask(taskId: string) {
     this.dispatchEvent(new CustomEvent("task-selected", { detail: { taskId }, bubbles: true, composed: true }))
   }
 
   render() {
+    const tasks = this.tasks ?? []
+
     return html`
       <section class="panel">
         <div class="header">
@@ -103,13 +112,13 @@ export class AgentbookTaskList extends LitElement {
             <h2 class="title">Tasks</h2>
             <div class="subtitle">${this.selectedPlanTitle || "Select a plan to view tasks."}</div>
           </div>
-          <div class="pill">${this.tasks.length} items</div>
+          <div class="pill">${tasks.length} items</div>
         </div>
 
-        ${this.tasks.length
+        ${tasks.length
           ? html`
               <div class="task-list">
-                ${this.tasks.map(
+                ${tasks.map(
                   (task) => html`
                     <button
                       class="task-card"

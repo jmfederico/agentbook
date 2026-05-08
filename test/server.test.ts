@@ -117,5 +117,11 @@ describe("server API", () => {
     expect(selectionPayload.project.id).toBe(foreignProjectId)
     expect(selectionPayload.plan?.id).toBe(foreignPlanId)
     expect(selectionPayload.task?.id).toBe(foreignTaskId)
+
+    const taskResponse = await app!.inject({ method: "GET", url: `/api/tasks/${encodeURIComponent(foreignTaskId)}` })
+    expect(taskResponse.statusCode).toBe(200)
+    const taskPayload = JSON.parse(taskResponse.body) as { task: { id: string; plan_id: string } }
+    expect(taskPayload.task.id).toBe(foreignTaskId)
+    expect(taskPayload.task.plan_id).toBe(foreignPlanId)
   })
 })

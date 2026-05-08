@@ -76,7 +76,7 @@ function createServerHelpers(appDb: Database, currentProject: ProjectRecord) {
     return { plan, task, summary, tasks }
   }
 
-  return { resolveProject, resolvePlanOrThrow, normalizeProjectSelection }
+  return { resolveProject, resolvePlanOrThrow, resolveTaskOrThrow, normalizeProjectSelection }
 }
 
 function createWebSocketServer(host: string, port: number) {
@@ -140,7 +140,7 @@ export function createServer(options: { db?: Database; currentProject?: ProjectR
   const appDb = options.db ?? db
   const appDbPath = options.dbPath ?? dbPath
   const appCurrentProject = options.currentProject ?? getCurrentProject(appDb)
-  const { resolveProject, resolvePlanOrThrow, normalizeProjectSelection } = createServerHelpers(appDb, appCurrentProject)
+  const { resolveProject, resolvePlanOrThrow, resolveTaskOrThrow, normalizeProjectSelection } = createServerHelpers(appDb, appCurrentProject)
   const app = Fastify({ logger: true })
 
   app.register(cors, { origin: true })

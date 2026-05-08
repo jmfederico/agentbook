@@ -103,8 +103,10 @@ export class AgentbookTaskList extends LitElement {
   selectedPlanTitle = ""
   loading = false
 
-  private selectTask(taskId: string) {
-    this.dispatchEvent(new CustomEvent("task-selected", { detail: { taskId }, bubbles: true, composed: true }))
+  private selectTask(task: TaskRow) {
+    this.dispatchEvent(
+      new CustomEvent("task-selected", { detail: { taskId: task.id, planId: task.plan_id }, bubbles: true, composed: true }),
+    )
   }
 
   render() {
@@ -129,7 +131,7 @@ export class AgentbookTaskList extends LitElement {
                       class="task-card"
                       type="button"
                       ?selected=${task.id === this.selectedTaskId}
-                      @click=${() => this.selectTask(task.id)}
+                      @click=${() => this.selectTask(task)}
                     >
                       <div class="task-title">${task.title}</div>
                       <div class="task-meta">

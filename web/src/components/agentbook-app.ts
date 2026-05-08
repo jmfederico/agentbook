@@ -221,7 +221,7 @@ export class AgentbookApp extends LitElement {
       this.selectedPlanId = selectedPlanId
 
       if (selectedPlanId) {
-        const [planResponseDetail, summaryResponse, taskResponse] = await Promise.all([
+        const [planResponseDetail, summaryResponse, taskListResponse] = await Promise.all([
           this.api.getPlan(selectedPlanId),
           this.api.getPlanSummary(selectedPlanId),
           this.api.listTasks(resolvedProjectId, selectedPlanId),
@@ -231,10 +231,10 @@ export class AgentbookApp extends LitElement {
 
         this.selectedPlan = planResponseDetail.plan
         this.summary = summaryResponse
-        this.tasks = taskResponse.tasks
+        this.tasks = taskListResponse.tasks
 
         if (this.selectedTaskId) {
-          const matchedTask = currentTasks.find((task) => task.id === this.selectedTaskId) ?? null
+          const matchedTask = taskListResponse.tasks.find((task) => task.id === this.selectedTaskId) ?? null
           this.selectedTask = matchedTask ?? this.selectedTask
           this.selectedTaskId = matchedTask?.id ?? this.selectedTaskId
         } else {
@@ -296,8 +296,8 @@ export class AgentbookApp extends LitElement {
     void this.loadSelection({ projectId: this.selectedProjectId, planId: event.detail.planId }, true)
   }
 
-  private handleTaskSelected = (event: CustomEvent<{ taskId: string }>) => {
-    void this.loadSelection({ projectId: this.selectedProjectId, taskId: event.detail.taskId }, true)
+  private handleTaskSelected = (event: CustomEvent<{ taskId: string; planId: string }>) => {
+    void this.loadSelection({ projectId: this.selectedProjectId, planId: event.detail.planId, taskId: event.detail.taskId }, true)
   }
 
   private handleRefreshRequested = () => {

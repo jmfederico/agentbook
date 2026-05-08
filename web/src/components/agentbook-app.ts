@@ -29,16 +29,26 @@ export class AgentbookApp extends LitElement {
   static styles = css`
     :host {
       display: block;
-      min-height: 100vh;
+      height: 100vh;
       color: #e2e8f0;
+      overflow: hidden;
     }
 
     .shell {
-      min-height: 100vh;
+      height: 100%;
       padding: 1rem;
       display: grid;
-      grid-template-rows: auto 1fr;
+      grid-template-rows: auto minmax(0, 1fr);
       gap: 1rem;
+      overflow: hidden;
+    }
+
+    .content {
+      min-height: 0;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      gap: 1rem;
+      overflow: hidden;
     }
 
     .topbar {
@@ -80,7 +90,9 @@ export class AgentbookApp extends LitElement {
       display: grid;
       gap: 1rem;
       grid-template-columns: minmax(280px, 0.95fr) minmax(280px, 1fr) minmax(320px, 1.2fr);
+      grid-template-rows: minmax(0, 1fr);
       align-items: stretch;
+      overflow: hidden;
     }
 
     .message {
@@ -95,6 +107,7 @@ export class AgentbookApp extends LitElement {
     @media (max-width: 1180px) {
       .grid {
         grid-template-columns: 1fr;
+        grid-template-rows: repeat(3, minmax(0, 1fr));
       }
     }
   `
@@ -311,37 +324,39 @@ export class AgentbookApp extends LitElement {
           <div class="status">${this.connectionState}</div>
         </header>
 
-        ${this.error ? html`<div class="message">${this.error}</div>` : null}
+        <div class="content">
+          ${this.error ? html`<div class="message">${this.error}</div>` : null}
 
-        <main class="grid">
-          <ab-project-browser
-            .projects=${projects}
-            .plans=${plans}
-            .selectedProjectId=${this.selectedProjectId}
-            .selectedPlanId=${this.selectedPlanId}
-            .loading=${this.loading}
-            @project-selected=${this.handleProjectSelected}
-            @plan-selected=${this.handlePlanSelected}
-            @refresh-requested=${this.handleRefreshRequested}
-          ></ab-project-browser>
+          <main class="grid">
+            <ab-project-browser
+              .projects=${projects}
+              .plans=${plans}
+              .selectedProjectId=${this.selectedProjectId}
+              .selectedPlanId=${this.selectedPlanId}
+              .loading=${this.loading}
+              @project-selected=${this.handleProjectSelected}
+              @plan-selected=${this.handlePlanSelected}
+              @refresh-requested=${this.handleRefreshRequested}
+            ></ab-project-browser>
 
-          <ab-task-list
-            .tasks=${tasks}
-            .selectedTaskId=${this.selectedTaskId}
-            .selectedPlanTitle=${activePlanTitle}
-            .loading=${this.loading}
-            @task-selected=${this.handleTaskSelected}
-          ></ab-task-list>
+            <ab-task-list
+              .tasks=${tasks}
+              .selectedTaskId=${this.selectedTaskId}
+              .selectedPlanTitle=${activePlanTitle}
+              .loading=${this.loading}
+              @task-selected=${this.handleTaskSelected}
+            ></ab-task-list>
 
-          <ab-detail-panel
-            .project=${this.selectedProject}
-            .plan=${this.selectedPlan}
-            .task=${this.selectedTask}
-            .summary=${this.summary}
-            .loading=${this.loading}
-            .connectionState=${this.connectionState}
-          ></ab-detail-panel>
-        </main>
+            <ab-detail-panel
+              .project=${this.selectedProject}
+              .plan=${this.selectedPlan}
+              .task=${this.selectedTask}
+              .summary=${this.summary}
+              .loading=${this.loading}
+              .connectionState=${this.connectionState}
+            ></ab-detail-panel>
+          </main>
+        </div>
       </div>
     `
   }

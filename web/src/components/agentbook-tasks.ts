@@ -14,19 +14,24 @@ export class AgentbookTaskList extends LitElement {
   static styles = css`
     :host {
       display: block;
+      height: 100%;
       min-height: 0;
+      overflow: hidden;
     }
 
     .panel {
       display: flex;
       flex-direction: column;
       gap: 0.85rem;
-      min-height: 100%;
+      height: 100%;
+      min-height: 0;
       padding: 1rem;
       background: rgba(15, 23, 42, 0.72);
       border: 1px solid rgba(148, 163, 184, 0.16);
       border-radius: 18px;
       box-shadow: 0 18px 50px rgba(2, 6, 23, 0.22);
+      box-sizing: border-box;
+      overflow: auto;
     }
 
     .header {

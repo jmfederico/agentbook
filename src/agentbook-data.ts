@@ -3,7 +3,6 @@ import { randomUUIDv7 } from "bun"
 import fs from "fs"
 import path from "path"
 import { execSync } from "child_process"
-import { createHash } from "crypto"
 import type {
   CreatePlanInput,
   CreateTaskInput,
@@ -20,6 +19,8 @@ import type {
   UpdatePlanInput,
   UpdateTaskInput,
 } from "./shared-types"
+import { ManualProjectSourceAdapter, listProjectDiscoverySources as listAdapterDiscoverySources, refreshProjectRegistryWithAdapters } from "./project-adapters"
+import { projectGitInfo, resolveProjectPath } from "./project-identity"
 
 export type { CreatePlanInput, CreateTaskInput, PlanLookup, PlanRow, PlanSummary, ProjectDiscoveryResponse, ProjectDiscoverySource, ProjectRefreshResponse, ProjectRecord, ProjectRow, TaskListFilters, TaskRow, UpdatePlanInput, UpdateTaskInput } from "./shared-types"
 
@@ -27,99 +28,18 @@ const LEGACY_TASK_STATUS_ALIASES: Record<string, string> = {
   needs_review: "needs_guidance",
 }
 
-function now() {
-  return Date.now()
-}
-
-function canonicalizeFsPath(input: string): string {
-  try {
-    return fs.realpathSync(input)
-  } catch {
-    return path.resolve(input)
-  }
-}
-
-function runGit(command: string, cwd: string): string | null {
-  try {
-    return execSync(command, { cwd, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] }).trim()
-  } catch {
-    return null
-  }
-}
-
-function currentProjectPath(): string {
-  const cwd = canonicalizeFsPath(process.cwd())
-  const gitRoot = runGit("git rev-parse --show-toplevel", cwd)
-  return gitRoot ? canonicalizeFsPath(gitRoot) : cwd
-}
-
-function currentProjectSource(): string {
-  return runGit("git rev-parse --show-toplevel", canonicalizeFsPath(process.cwd())) ? "git" : "filesystem"
-}
-
-function projectNameForPath(projectPath: string): string {
-  return path.basename(projectPath) || "agentbook"
-}
-
-function projectIdForPath(projectPath: string): string {
-  return `project-${createHash("sha1").update(canonicalizeFsPath(projectPath)).digest("hex").slice(0, 12)}`
-}
+const manualProjectSourceAdapter = new ManualProjectSourceAdapter()
 
 function currentProjectSeed(): ProjectRow {
-  const projectPath = currentProjectPath()
-  const ts = now()
-  return {
-    id: projectIdForPath(projectPath),
-    path: projectPath,
-    name: projectNameForPath(projectPath),
-    title: projectNameForPath(projectPath),
-    description: projectPath,
-    source: currentProjectSource(),
-    created_at: ts,
-    updated_at: ts,
-  }
+  return manualProjectSourceAdapter.refreshProject(resolveProjectPath())
 }
-
-function projectGitInfo(projectPath: string): Pick<ProjectRecord, "git_root" | "git_common_dir"> {
-  const gitRoot = runGit("git rev-parse --show-toplevel", projectPath)
-  if (!gitRoot) return { git_root: null, git_common_dir: null }
-
-  const gitCommonDirRaw = runGit("git rev-parse --git-common-dir", projectPath)
-  return {
-    git_root: canonicalizeFsPath(gitRoot),
-    git_common_dir: gitCommonDirRaw ? canonicalizeFsPath(path.resolve(projectPath, gitCommonDirRaw)) : null,
-  }
-}
-
-const PROJECT_DISCOVERY_SOURCES: ProjectDiscoverySource[] = [
-  {
-    id: "opencode",
-    title: "opencode",
-    description: "Discover projects from opencode workspaces and metadata.",
-  },
-  {
-    id: "pi",
-    title: "Pi.dev",
-    description: "Discover projects from Pi.dev-backed workflows and metadata.",
-  },
-  {
-    id: "manual",
-    title: "Manual / generic",
-    description: "Keep canonical filesystem-path projects in the shared registry.",
-  },
-]
 
 export function listProjectDiscoverySources(): ProjectDiscoverySource[] {
-  return PROJECT_DISCOVERY_SOURCES
+  return listAdapterDiscoverySources([manualProjectSourceAdapter])
 }
 
 export function refreshProjectRegistry(db: Database): ProjectRefreshResponse {
-  const currentProject = getCurrentProject(db)
-  return {
-    currentProjectId: currentProject.id,
-    projects: listProjects(db),
-    sources: listProjectDiscoverySources(),
-  }
+  return refreshProjectRegistryWithAdapters(db, [manualProjectSourceAdapter], { ensureProjectRow, listProjects })
 }
 
 function ensureProjectRow(db: Database, seed: ProjectRow): ProjectRow {
@@ -134,7 +54,7 @@ function ensureProjectRow(db: Database, seed: ProjectRow): ProjectRow {
 }
 
 export function resolveCurrentProjectPath() {
-  return currentProjectPath()
+  return resolveProjectPath()
 }
 
 export function getCurrentProjectRow(db: Database): ProjectRow {
